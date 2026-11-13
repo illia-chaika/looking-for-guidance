@@ -27,8 +27,8 @@ func bitName(n int) string  { return fmt.Sprintf("looking-for-guidance-bit-%03d"
 
 func slotTOC(n int) string {
 	return fmt.Sprintf(`## Interface: 16001
-## Title: Looking for Guidance — канал %03d
-## Notes: Канал сообщений игрового помощника.
+## Title: Looking for Guidance — channel %03d
+## Notes: Message channel of the in-game advisor.
 ## Group: looking-for-guidance
 ## DefaultState: enabled
 ## LoadOnDemand: 1
@@ -39,7 +39,7 @@ func slotTOC(n int) string {
 }
 
 func bitTOC(n int) string {
-	return fmt.Sprintf("## Interface: 16001\n## Title: Looking for Guidance — канал данных %03d\n## Group: looking-for-guidance\n## LoadOnDemand: 1\n", n)
+	return fmt.Sprintf("## Interface: 16001\n## Title: Looking for Guidance — data channel %03d\n## Group: looking-for-guidance\n## LoadOnDemand: 1\n", n)
 }
 
 func payloadPath(wowDir string) string {

@@ -8,3 +8,6 @@ __pycache__/
 
 # Local state of a development machine: the game profile, chat history, logs and installation backups.
 /local/
+
+# Working notes of coding agents on a development machine.
+/.local/

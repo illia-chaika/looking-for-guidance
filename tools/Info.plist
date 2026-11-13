@@ -12,6 +12,6 @@
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSRemovableVolumesUsageDescription</key><string>Looking for Guidance устанавливает игровой аддон и передаёт сообщения через папку WoW Forever на внешнем диске.</string>
+  <key>NSRemovableVolumesUsageDescription</key><string>Looking for Guidance installs its add-on and exchanges messages through the WoW Forever folder on an external disk.</string>
 </dict>
 </plist>

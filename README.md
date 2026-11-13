@@ -132,8 +132,9 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 
 - The companion can miss frames while the game is busy. Up to six in a row are rebuilt from check frames and a
   packet that is still incomplete is sent once more, so the worst case is a delay; `helper.log` records every miss.
-- Claude Code as the adviser has been checked outside the game — every kind of journal research and a gameplay
-  question with real character data — but not yet played with in a full game session.
+- Claude Code as the adviser has had less play than Codex. In the game it has answered chat questions with the
+  character's data and prepared the hotfix digest; the other kinds of journal research were checked outside the
+  game only.
 
 ## Development
 
