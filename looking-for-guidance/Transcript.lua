@@ -115,11 +115,87 @@ function make.item(child)
     return block
 end
 
+function make.numbered(child)
+    local block = linked(CreateFrame("Frame", nil, child))
+    block.number = Kit.Text(block, "t-body", "detail")
+    Kit.Place(block.number, block, 0, 0)
+    block.text = Kit.Text(block, "t-body", "prose")
+    return block
+end
+
 function make.heading(child)
     local block = linked(CreateFrame("Frame", nil, child))
     block.text = Kit.Text(block, "t-title", "strong")
     Kit.Place(block.text, block, 0, 0)
     return block
+end
+
+function make.table(child)
+    local block = linked(CreateFrame("Frame", nil, child))
+    block.cells, block.rules = {}, {}
+    return block
+end
+
+local COLUMN_GAP = Kit.space["space-3"]
+local CELL_PAD = Kit.space["space-1"]
+local NARROW = 72 -- a column squeezed below this reads worse than the same table as a list
+
+-- Every column gets what its longest cell asks for; when that is too much, columns give way in proportion,
+-- none below NARROW. No widths means the table does not fit and is shown as a list instead.
+local function columnWidths(natural, width)
+    local room, need, widths = width - COLUMN_GAP * (#natural - 1), 0, {}
+    for column, wanted in ipairs(natural) do
+        widths[column] = math.min(wanted, NARROW)
+        room, need = room - widths[column], need + wanted - widths[column]
+    end
+    if room < 0 then return end
+    for column, wanted in ipairs(natural) do
+        if need > 0 then widths[column] = widths[column] + math.floor(math.min(1, room / need) * (wanted - widths[column])) end
+    end
+    return widths
+end
+
+local function grid(block, piece, width)
+    local columns, used, natural = #piece.head, 0, {}
+    local function fill(row, ink)
+        for column = 1, columns do
+            used = used + 1
+            local cell = block.cells[used] or Kit.Text(block, "t-body", ink)
+            block.cells[used] = cell
+            Kit.Paint(cell, ink)
+            cell:SetJustifyH(piece.align[column])
+            T.SetContent(cell, row[column])
+            cell:Show()
+            natural[column] = math.max(natural[column] or 0, math.ceil(cell:GetUnboundedStringWidth()) + 1)
+        end
+    end
+    fill(piece.head, "strong")
+    for _, row in ipairs(piece.rows) do fill(row, "prose") end
+    for index = used + 1, #block.cells do block.cells[index]:Hide() end
+    local widths = columnWidths(natural, width)
+    if not widths then return end
+    local y = 0
+    for row = 0, #piece.rows do
+        local x, height = 0, 0
+        for column = 1, columns do
+            local cell = block.cells[row * columns + column]
+            cell:SetWidth(widths[column])
+            height = math.max(height, Kit.TextHeight(cell))
+            cell:ClearAllPoints()
+            Kit.Place(cell, block, x, y + CELL_PAD)
+            x = x + widths[column] + COLUMN_GAP
+        end
+        y = y + height + 2 * CELL_PAD
+        local rule = block.rules[row + 1] or Kit.Hairline(block, "rule", "TOP")
+        block.rules[row + 1] = rule
+        rule.offset = y
+        rule:ClearAllPoints()
+        rule:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -y)
+        rule:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -y)
+        rule:SetShown(row < #piece.rows)
+    end
+    for index = #piece.rows + 2, #block.rules do block.rules[index]:Hide() end
+    return y
 end
 
 function make.expand(child)
@@ -389,16 +465,42 @@ function Transcript.Build(parent, handlers)
         local sources, questID = {}, nil
         local pieces = Format.Blocks(turn.text, Kit.Hex("strong"), sources)
         local tracker = T.settings.appearance == "tracker" and #pieces > 1
-        for index, piece in ipairs(pieces) do
-            if tracker and not open[key] and index > 1 then break end
-            local kind = piece.kind == "item" and "item" or "paragraph"
-            if index == 1 and #pieces > 1 and kind == "paragraph" and #piece.text < 160 then kind = "heading" end
+        local function put(kind, text, number, gap)
             local block = take(kind)
             block.sources, block.showSource = sources, showSource
-            T.SetContent(block.text, piece.text)
+            T.SetContent(block.text, text)
             local indent = kind == "item" and Kit.space["space-4"] or 0
-            last = place(block, last + (index > 1 and GAP or 0), measure(block.text, width - indent))
+            if kind == "numbered" then
+                block.number:SetText(number)
+                indent = math.ceil(block.number:GetUnboundedStringWidth()) + GAP
+                block.text:ClearAllPoints()
+                Kit.Place(block.text, block, indent, 0)
+            end
+            last = place(block, last + gap, measure(block.text, width - indent))
             first = first or block
+        end
+        for index, piece in ipairs(pieces) do
+            if tracker and not open[key] and index > 1 then break end
+            local kind = piece.kind == "code" and "paragraph" or piece.number and "numbered" or piece.kind
+            if index == 1 and #pieces > 1 and kind == "paragraph" and #piece.text < 160 then kind = "heading" end
+            local gap = index == 1 and 0 or piece.kind == "heading" and PAD or GAP
+            if kind == "table" then
+                local block = take("table")
+                block.sources, block.showSource = sources, showSource
+                local height = grid(block, piece, width)
+                if height then
+                    last = place(block, last + gap, height)
+                    first = first or block
+                else
+                    block:Hide()
+                    for _, row in ipairs(Format.TableRows(piece)) do
+                        put("item", row, nil, gap)
+                        gap = GAP
+                    end
+                end
+            else
+                put(kind, piece.text, piece.number, gap)
+            end
             questID = questID or piece.text:match("|Hquest:(%d+):")
         end
         if tracker then

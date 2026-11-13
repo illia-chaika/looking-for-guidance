@@ -194,17 +194,88 @@ local function emphasise(text, colour, sources)
     return linkify((text:gsub("`([^`]+)`", "|c" .. colour .. "%1|r")), sources)
 end
 
+local function cells(line)
+    local row = {}
+    line = line:gsub("^%s*|", ""):gsub("|%s*$", "")
+    for cell in (line .. "|"):gmatch("(.-)|") do
+        row[#row + 1] = cell:match("^%s*(.-)%s*$")
+    end
+    return row
+end
+
+-- The line under a Markdown table's header: |---|:---:|---:|
+local function ruling(line)
+    return line ~= nil and line:find("|", 1, true) and line:find("-", 1, true) and not line:find("[^%s|:%-]")
+end
+
+-- Both advisers write tables the same way: a header row, the ruling, then one row per line.
+local function tabulate(lines, at, colour, sources)
+    local head, marks = cells(lines[at]), cells(lines[at + 1])
+    if #head ~= #marks then return end
+    local block = { kind = "table", head = {}, rows = {}, align = {}, colour = colour }
+    local seen = {}
+    for column, cell in ipairs(head) do
+        block.head[column] = emphasise(cell, colour, sources)
+        block.align[column] = marks[column]:find(":$") and (marks[column]:find("^:") and "CENTER" or "RIGHT") or "LEFT"
+        seen[#seen + 1] = block.head[column]
+    end
+    local nextLine = at + 2
+    while lines[nextLine] and lines[nextLine]:find("|", 1, true) do
+        local source, row = cells(lines[nextLine]), {}
+        for column = 1, #head do
+            row[column] = emphasise(source[column] or "", colour, sources)
+            seen[#seen + 1] = row[column]
+        end
+        block.rows[#block.rows + 1] = row
+        nextLine = nextLine + 1
+    end
+    block.text = table.concat(seen, " ")
+    return block, nextLine
+end
+
+-- A table too wide for the window reads as a list: the first cell names the row, the rest follow with their headers.
+function Format.TableRows(block)
+    local rows = {}
+    for _, row in ipairs(block.rows) do
+        local name, rest = row[1], {}
+        if name ~= "" and not name:find("|c", 1, true) then name = "|c" .. block.colour .. name .. "|r" end
+        for column = 2, #row do
+            if row[column] ~= "" then
+                rest[#rest + 1] = (block.head[column] ~= "" and block.head[column] .. ": " or "") .. row[column]
+            end
+        end
+        rows[#rows + 1] = name .. (#rest > 0 and name ~= "" and " · " or "") .. table.concat(rest, " · ")
+    end
+    return rows
+end
+
 function Format.Blocks(source, colour, sources)
-    local blocks, fenced = {}, false
-    for line in (source .. "\n"):gmatch("(.-)\r?\n") do
-        if line:find("^```") then
+    local lines = {}
+    for line in (source .. "\n"):gmatch("(.-)\r?\n") do lines[#lines + 1] = line end
+    local blocks, fenced, at = {}, false, 1
+    while at <= #lines do
+        local line, block, after = lines[at], nil, nil
+        if not fenced and line:find("|", 1, true) and ruling(lines[at + 1]) then
+            block, after = tabulate(lines, at, colour, sources)
+        end
+        if block then
+            table.insert(blocks, block)
+            at = after - 1
+        elseif line:find("^```") then
             fenced = not fenced
         elseif fenced then
             table.insert(blocks, { kind = "code", text = "|c" .. colour .. Format.Escape(line) .. "|r" })
         elseif line:find("%S") then
+            local heading = line:match("^%s?%s?%s?#+%s+(.-)%s*#*%s*$")
+            local number, step = line:match("^%s*(%d+)[%.%)] (.*)$")
             local item = line:match("^%s*[%-%*] (.*)$")
-            table.insert(blocks, { kind = item and "item" or "paragraph", text = emphasise(item or line, colour, sources) })
+            table.insert(blocks, {
+                kind = heading and "heading" or (item or step) and "item" or "paragraph",
+                number = number and number .. ".",
+                text = emphasise(heading or step or item or line, colour, sources),
+            })
         end
+        at = at + 1
     end
     return blocks
 end
