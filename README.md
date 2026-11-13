@@ -54,7 +54,9 @@ flowchart LR
 ```
 
 - **Game → computer.** The add-on encodes each message as 16-byte frames in the enabled/disabled state of 128 marker
-  add-ons and asks the game to save the add-on list. The companion watches `AddOns.txt` and decodes the frames.
+  add-ons and asks the game to save the add-on list. The companion watches `AddOns.txt` and decodes the frames. A
+  frame lives on disk for 40 ms and the companion reads it from outside, so every 48 data frames are followed by six
+  check frames: any six frames missed in a row are rebuilt, and a packet that still does not arrive is sent again.
 - **Computer → game.** The companion writes one Lua file. The add-on reads it by loading a fresh load-on-demand
   add-on each time — 512 of them per interface session.
 - **Advice.** The companion runs an agent you already have: the [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
@@ -136,8 +138,8 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 
 ## Known issues
 
-- Now and then the companion misses a frame from the game and the message is lost. The add-on resends it once by
-  itself, so you see a delay rather than an error. The cause is under investigation; `helper.log` records every miss.
+- The companion can miss frames while the game is busy. Up to six in a row are rebuilt from check frames and a
+  packet that is still incomplete is sent once more, so the worst case is a delay; `helper.log` records every miss.
 - Claude Code as the adviser has been checked outside the game — every kind of journal research and a gameplay
   question with real character data — but not yet played with in a full game session.
 

@@ -90,6 +90,10 @@ T.On("PacketSent", function(seq)
     if T.Store.Tracked(seq) and T.Store.Awaiting() then
         idle = 0
         step = 1
-        schedule(CADENCE[1])
+        -- A read already due sooner stays: it is the one that confirms the packet sent before this one, and
+        -- moving it later let that packet be given up without its second sending.
+        if not due or due > GetTime() + CADENCE[1] then
+            schedule(CADENCE[1])
+        end
     end
 end)

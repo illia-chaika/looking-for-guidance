@@ -577,21 +577,27 @@ loads = #wow.loaded
 wow.Run(120)
 check("with nothing else awaited the checks stop, spending no more of the session's 128 loads", #wow.loaded == loads and T.Transport.SlotsLeft() == left)
 
+-- Reads the saved frames back the way the helper does when none is missed: 48 data frames, then 6 check frames.
 local function received()
-    local packets, stream, count = {}, nil, nil
+    local packets, stream, count, offset = {}, nil, nil, 0
     for _, frame in ipairs(wow.bits) do
         local head = frame:byte(1)
         if head >= 128 then
-            stream = ""
-        elseif head ~= ((count or 0) + 1) % 128 then
+            stream, offset = "", 0
+        elseif head % 64 ~= ((count or 0) + 1) % 64 then
             stream = nil
         end
-        count = head % 128
-        stream = stream and stream .. frame:sub(2)
-        local length = stream and #stream >= 2 and stream:byte(1) * 256 + stream:byte(2)
-        if length and #stream >= 2 + length then
-            table.insert(packets, { body = stream:sub(3, 2 + length), padding = stream:sub(3 + length) })
-            stream = nil
+        count = head % 64
+        if stream then
+            local length = #stream >= 2 and stream:byte(1) * 256 + stream:byte(2)
+            local data = not length or #stream < 2 + length
+            if data and offset < 48 then stream = stream .. frame:sub(2) end
+            offset = (offset + 1) % 54
+            if head % 128 >= 64 then
+                length = stream:byte(1) * 256 + stream:byte(2)
+                table.insert(packets, { body = stream:sub(3, 2 + length), padding = stream:sub(3 + length) })
+                stream = nil
+            end
         end
     end
     return packets

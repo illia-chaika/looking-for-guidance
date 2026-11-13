@@ -9,13 +9,17 @@ local SLOT_LIMIT = 1024
 local BITS = 128
 local FRAME_DATA = BITS / 8 - 1
 local FRAME_SECONDS = 0.04
+-- After every BLOCK data frames come CHECKS check frames, and after the last, shorter block too. In a block, the
+-- frames whose offsets are equal modulo CHECKS XOR to zero, so the helper rebuilds up to CHECKS missed frames in a
+-- row. It reads the file from outside and has been away from it for a fifth of a second beside a busy game.
+local BLOCK, CHECKS = 48, 6
 
 local bits = {}
 for index = 1, BITS do
     bits[index] = string.format("looking-for-guidance-bit-%03d", index)
 end
 
-local slot, seq, counter = 1, 0, time() % 128
+local slot, seq, counter = 1, 0, time() % 64
 local installed
 
 local function slotName(index)
@@ -71,8 +75,9 @@ local function step()
         C_Timer.After(wait, step)
         return
     end
-    local head = (packet.next == 1 and 128 or 0) + counter
-    counter = (counter + 1) % 128
+    -- The head says where the packet starts and ends; its counter runs on across packets.
+    local head = (packet.next == 1 and 128 or 0) + (packet.next == #packet.frames and 64 or 0) + counter
+    counter = (counter + 1) % 64
     show(string.char(head) .. packet.frames[packet.next])
     shownAt = clock()
     C_Timer.After(FRAME_SECONDS, step)
@@ -85,10 +90,27 @@ end
 
 local function frames(body)
     local stream = string.char(math.floor(#body / 256), #body % 256) .. body
-    local list = {}
-    for start = 1, #stream, FRAME_DATA do
-        local chunk = stream:sub(start, start + FRAME_DATA - 1)
-        table.insert(list, chunk .. string.rep("\0", FRAME_DATA - #chunk))
+    local list, start = {}, 1
+    while start <= #stream do
+        local sums, count = {}, 0
+        while count < BLOCK and start <= #stream do
+            local chunk = stream:sub(start, start + FRAME_DATA - 1)
+            chunk = chunk .. string.rep("\0", FRAME_DATA - #chunk)
+            list[#list + 1] = chunk
+            local sum = sums[count % CHECKS] or {}
+            sums[count % CHECKS] = sum
+            for index = 1, FRAME_DATA do
+                sum[index] = bit.bxor(sum[index] or 0, chunk:byte(index))
+            end
+            start, count = start + FRAME_DATA, count + 1
+        end
+        for offset = count, count + CHECKS - 1 do
+            local sum, check = sums[offset % CHECKS], {}
+            for index = 1, FRAME_DATA do
+                check[index] = string.char(sum and sum[index] or 0)
+            end
+            list[#list + 1] = table.concat(check)
+        end
     end
     return list
 end

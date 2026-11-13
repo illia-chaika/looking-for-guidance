@@ -17,6 +17,8 @@ import (
 // Writes AddOns.txt the way the game does, one frame per interval, and reads it with the app's own watcher.
 // FOREVER_FRAMES names a folder on the disk to measure, for example one on the game's disk; the test leaves nothing
 // there. FOREVER_FRAME_MS changes the 40 ms spacing and FOREVER_FRAME_COUNT the number of frames.
+// FOREVER_FRAME_SKIP leaves three frames in a row unwritten once in that many frames, which the check frames must
+// make up for; a block is 54 frames long and survives one such gap, so smaller numbers lose packets.
 // FOREVER_FRAME_PAYLOAD_MS also rewrites a payload of the usual size beside it that often, as the app does while it
 // answers.
 func TestFrameSoak(t *testing.T) {
@@ -76,7 +78,7 @@ func TestFrameSoak(t *testing.T) {
 		}
 		sent++
 		packet := encodeFrames(fmt.Sprintf(`{"type":"read","session":"soak","seq":%d,"at":1790000000,"text":"%s"}`, sent, filler.String()), counter)
-		counter = packet[len(packet)-1][0] & 0x7f
+		counter = packet[len(packet)-1][0] & frameCount
 		frames = append(frames, packet...)
 	}
 	var payloads int
@@ -106,7 +108,12 @@ func TestFrameSoak(t *testing.T) {
 	// The pause follows each write, so two frames are never closer than the spacing, however late the writer runs.
 	var slowest, longest time.Duration
 	last := time.Now()
-	for _, frame := range frames {
+	skip, _ := strconv.Atoi(os.Getenv("FOREVER_FRAME_SKIP"))
+	for i, frame := range frames {
+		if skip > 6 && i%skip >= skip/2 && i%skip < skip/2+3 {
+			time.Sleep(spacing)
+			continue
+		}
 		slowest = max(slowest, write(frame))
 		longest, last = max(longest, time.Since(last)), time.Now()
 		time.Sleep(spacing)
@@ -118,12 +125,12 @@ func TestFrameSoak(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	read, lost, missed, run := 0, 0, 0, 0
+	read, missed, restored, lost := 0, 0, 0, 0
 	for _, f := range o.files {
-		read, lost, missed, run = read+f.frames.frames, lost+f.frames.lost, missed+f.frames.missed, max(run, f.frames.run)
+		read, missed, restored, lost = read+f.frames.frames, missed+f.frames.missed, restored+f.frames.restored, lost+f.frames.lost
 	}
-	t.Logf("%s every %s: %d frames written, %d read; %d packets sent, %d received, %d lost to %d missed frames, at most %d in a row; slowest write %s, longest step %s",
-		base, spacing, len(frames), read, sent, len(out), lost, missed, run, slowest.Round(100*time.Microsecond), longest.Round(time.Millisecond))
+	t.Logf("%s every %s: %d frames written, %d read; %d packets sent, %d received; %d frames missed, %d rebuilt, %d packets lost; slowest write %s, longest step %s",
+		base, spacing, len(frames), read, sent, len(out), missed, restored, lost, slowest.Round(100*time.Microsecond), longest.Round(time.Millisecond))
 	if payloads > 0 {
 		t.Logf("%d payload writes beside it, slowest %s", payloads, slowestPayload.Round(100*time.Microsecond))
 	}

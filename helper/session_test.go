@@ -171,7 +171,7 @@ func TestSessionBridgesCodexEndToEnd(t *testing.T) {
 			if err := os.WriteFile(addOns, []byte(addOnsText(frame)), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			counter = frame[0] & 0x7f
+			counter = frame[0] & frameCount
 			time.Sleep(40 * time.Millisecond)
 		}
 	}

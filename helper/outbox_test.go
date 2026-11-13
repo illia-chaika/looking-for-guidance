@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,18 +35,36 @@ func encodeFrames(json string, counter byte) [][frameBytes]byte {
 	w := zlib.NewWriter(&z)
 	w.Write([]byte(json))
 	w.Close()
-	data := append([]byte{byte(z.Len() >> 8), byte(z.Len())}, z.Bytes()...)
+	return encodeStream(z.Bytes(), counter)
+}
+
+// encodeStream frames a packet body the way the add-on does: blocks of data frames, each followed by check frames.
+func encodeStream(body []byte, counter byte) [][frameBytes]byte {
+	stream := append([]byte{byte(len(body) >> 8), byte(len(body))}, body...)
 	var frames [][frameBytes]byte
-	for first := true; len(data) > 0; first = false {
-		counter = (counter + 1) & 0x7f
-		var f [frameBytes]byte
-		f[0] = counter
-		if first {
-			f[0] |= 0x80
-		}
-		data = data[copy(f[1:], data):]
+	add := func(data [frameData]byte) {
+		counter = (counter + 1) & frameCount
+		f := [frameBytes]byte{counter}
+		copy(f[1:], data[:])
 		frames = append(frames, f)
 	}
+	for len(stream) > 0 {
+		var sums [frameChecks][frameData]byte
+		count := 0
+		for ; count < frameBlock && len(stream) > 0; count++ {
+			var data [frameData]byte
+			stream = stream[copy(data[:], stream):]
+			for i, b := range data {
+				sums[count%frameChecks][i] ^= b
+			}
+			add(data)
+		}
+		for offset := count; offset < count+frameChecks; offset++ {
+			add(sums[offset%frameChecks])
+		}
+	}
+	frames[0][0] |= frameStart
+	frames[len(frames)-1][0] |= frameEnd
 	return frames
 }
 
@@ -80,59 +99,123 @@ func TestParseFrame(t *testing.T) {
 }
 
 func TestFrameDecoder(t *testing.T) {
-	frames := encodeFrames(replyJSON, 126)
-	if len(frames) < 4 {
-		t.Fatalf("want a multi-frame packet, got %d frames", len(frames))
+	body := func(size int, salt byte) []byte {
+		out := make([]byte, size)
+		for i := range out {
+			out[i] = byte(i*31+7) ^ salt
+		}
+		return out
 	}
-	decode := func(d *frameDecoder, frames [][frameBytes]byte) (packet, bool) {
+	feed := func(d *frameDecoder, frames [][frameBytes]byte) (got [][]byte) {
 		for _, f := range frames {
 			if data := d.add(f); data != nil {
-				p, err := decodePacket(data)
-				return p, err == nil
+				got = append(got, append([]byte(nil), data...))
 			}
 		}
-		return packet{}, false
+		return got
+	}
+	without := func(frames [][frameBytes]byte, from, count int) [][frameBytes]byte {
+		return append(append([][frameBytes]byte{}, frames[:from]...), frames[from+count:]...)
+	}
+	before := body(100, 1)
+	lead := encodeStream(before, 20)
+	after := func(frames [][frameBytes]byte) byte { return frames[len(frames)-1][0] & frameCount }
+
+	// Any run of up to six missed frames is rebuilt, wherever it falls: in the first frames, across the data and
+	// check frames of a block, across two blocks, in the last frames. Sizes cover one short block, exactly one
+	// block, a block and one frame, and several blocks.
+	for _, size := range []int{1, 13, 14, 88, 700, 717, 718, 719, 1400, 2200} {
+		want := body(size, 2)
+		frames := encodeStream(want, after(lead))
+		for run := 0; run <= frameChecks; run++ {
+			for from := 0; from+run <= len(frames); from++ {
+				var d frameDecoder
+				got := feed(&d, append(append([][frameBytes]byte{}, lead...), without(frames, from, run)...))
+				if len(got) != 2 || !bytes.Equal(got[0], before) || !bytes.Equal(got[1], want) || d.lost != 0 {
+					t.Fatalf("%d bytes (%d frames) without frames %d..%d: %d packets, %d lost", size, len(frames), from, from+run-1, len(got), d.lost)
+				}
+				if run > 0 && from+run < len(frames) && d.missed != run {
+					t.Fatalf("%d bytes without frames %d..%d: counted %d missed", size, from, from+run-1, d.missed)
+				}
+				if run == 0 || from+run >= len(frames) {
+					continue
+				}
+				// A second packet follows and is read too, whatever was missed in the one before.
+				next := body(40, 3)
+				if got := feed(&d, encodeStream(next, after(frames))); len(got) != 1 || !bytes.Equal(got[0], next) {
+					t.Fatalf("%d bytes without frames %d..%d: the next packet was not read", size, from, from+run-1)
+				}
+			}
+		}
 	}
 
+	// Seven in a row are too many for six check frames. The packet is lost and counted once; the next one is read.
+	want := body(700, 4)
+	frames := encodeStream(want, after(lead))
 	var d frameDecoder
-	d.start([frameBytes]byte{126})
+	if got := feed(&d, append(append([][frameBytes]byte{}, lead...), without(frames, 10, frameChecks+1)...)); len(got) != 1 {
+		t.Fatalf("a packet with seven frames missed in a row was read: %d packets", len(got))
+	}
+	next := body(40, 5)
+	if got := feed(&d, encodeStream(next, after(frames))); len(got) != 1 || !bytes.Equal(got[0], next) || d.lost != 1 {
+		t.Fatalf("after a lost packet: %d packets, %d lost", len(got), d.lost)
+	}
 
+	// Two runs in different blocks are both rebuilt. Two frames of one group in the same block are not.
+	frames = encodeStream(body(2200, 6), 0)
+	d = frameDecoder{}
+	// Frames 20..25 are six data frames of the first block; 100..104 are its neighbour's last two data frames and
+	// three check frames, which nobody needs back.
+	if got := feed(&d, without(without(frames, 100, 5), 20, 6)); len(got) != 1 || d.restored != 8 {
+		t.Fatalf("two runs in different blocks: %d packets, %d frames rebuilt", len(got), d.restored)
+	}
+	d = frameDecoder{}
+	if got := feed(&d, without(without(frames, 9, 1), 3, 1)); len(got) != 0 {
+		t.Fatal("two missed frames of the same group were rebuilt from one check frame")
+	}
+
+	// A frame read twice counts once. What was on disk when the app started is an old packet's frame.
+	d = frameDecoder{}
 	var twice [][frameBytes]byte
 	for _, f := range frames {
 		twice = append(twice, f, f)
 	}
-	p, ok := decode(&d, twice)
-	if !ok || p.Type != "reply" || p.Session != "s1790000000" || p.Seq != 7 || p.Thread != "t1" || !strings.HasPrefix(p.ContextText, "WoW Forever") {
-		t.Fatalf("decoded %+v %v", p, ok)
+	if got := feed(&d, twice); len(got) != 1 || d.frames != len(frames) {
+		t.Fatalf("frames read twice: %d packets, %d frames counted", len(got), d.frames)
+	}
+	d = frameDecoder{}
+	d.start(lead[len(lead)-1])
+	if got := feed(&d, frames[2:]); len(got) != 0 {
+		t.Fatal("read a packet whose first frames came before the app knew where packets begin")
+	}
+	if got := feed(&d, encodeStream(next, after(frames))); len(got) != 1 {
+		t.Fatal("the first whole packet after the app started was not read")
 	}
 
+	// An interface reload starts the counter anywhere. The first frame of its packet says where it begins.
 	d = frameDecoder{}
-	gap := append(append([][frameBytes]byte{}, frames[:2]...), frames[3:]...)
-	if _, ok := decode(&d, gap); ok {
-		t.Fatal("decoded a packet with a missing frame")
-	}
-	if d.lost != 1 {
-		t.Fatalf("a packet lost to a missed frame was counted %d times", d.lost)
-	}
-	next := encodeFrames(strings.Replace(replyJSON, `"seq":7`, `"seq":8`, 1), frames[len(frames)-1][0]&0x7f)
-	if p, ok := decode(&d, next); !ok || p.Seq != 8 {
-		t.Fatalf("packet after a gap: %+v %v", p, ok)
+	feed(&d, lead)
+	if got := feed(&d, encodeStream(next, after(lead)+17)); len(got) != 1 || !bytes.Equal(got[0], next) {
+		t.Fatal("the packet after a reload was not read")
 	}
 
-	d = frameDecoder{}
-	if _, ok := decode(&d, frames[1:]); ok {
-		t.Fatal("decoded a packet without its first frame")
-	}
-
-	d = frameDecoder{}
-	decode(&d, frames)
-	last := frames[len(frames)-1][0] & 0x7f
-	reload := encodeFrames(strings.Replace(replyJSON, `"s1790000000"`, `"s1790000100"`, 1), (last-1)&0x7f)
-	if reload[0][0]&0x7f != last {
-		t.Fatal("test setup: the first frame should repeat the last counter")
-	}
-	if p, ok := decode(&d, reload); !ok || p.Session != "s1790000100" {
-		t.Fatalf("packet after a reload: %+v %v", p, ok)
+	// Whatever is missed, a packet is either rebuilt exactly or not delivered.
+	rnd := rand.New(rand.NewSource(1))
+	for range 2000 {
+		want := body(1+rnd.Intn(1800), byte(rnd.Intn(256)))
+		frames := encodeStream(want, byte(rnd.Intn(64)))
+		var kept [][frameBytes]byte
+		for _, f := range frames {
+			if rnd.Intn(100) >= 4 {
+				kept = append(kept, f)
+			}
+		}
+		d := frameDecoder{}
+		for _, got := range feed(&d, kept) {
+			if !bytes.Equal(got, want) {
+				t.Fatalf("a damaged packet of %d bytes was delivered changed", len(want))
+			}
+		}
 	}
 }
 
@@ -141,7 +224,9 @@ func TestDecodePacketChecksNonsense(t *testing.T) {
 	var d frameDecoder
 	var data []byte
 	for _, f := range frames {
-		data = d.add(f)
+		if out := d.add(f); out != nil {
+			data = out
+		}
 	}
 	data[len(data)-1] ^= 0xff
 	if _, err := decodePacket(data); err == nil {
@@ -261,8 +346,7 @@ func TestRealEncoderFrames(t *testing.T) {
 	if !ok {
 		t.Fatal("first line is not the expected JSON")
 	}
-	var d frameDecoder
-	var data []byte
+	var frames [][frameBytes]byte
 	for lines.Scan() {
 		raw, err := hex.DecodeString(strings.TrimSpace(lines.Text()))
 		if err != nil || len(raw) != frameBytes {
@@ -272,30 +356,52 @@ func TestRealEncoderFrames(t *testing.T) {
 		if !ok {
 			t.Fatal("frame did not survive AddOns.txt")
 		}
-		if out := d.add(frame); out != nil {
-			data = out
-		}
+		frames = append(frames, frame)
 	}
-	if data == nil {
-		t.Fatal("frames did not complete a packet")
+	if len(frames) <= frameBlock+frameChecks {
+		t.Fatalf("the recorded packet should span more than one block, got %d frames", len(frames))
 	}
-	r, err := zlib.NewReader(bytes.NewReader(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var gotJSON, wantJSON any
-	json.Unmarshal(body, &gotJSON)
+	var wantJSON any
 	json.Unmarshal([]byte(want), &wantJSON)
-	if !reflect.DeepEqual(gotJSON, wantJSON) {
-		t.Fatalf("decoded %s\nwant %s", body, want)
-	}
-	p, err := decodePacket(data)
-	if err != nil || p.Type == "" || p.Seq < 1 {
-		t.Fatalf("decodePacket: %+v %v", p, err)
+	// A packet before it tells the decoder where this one begins, as in the game after the first packet.
+	lead := encodeStream([]byte("before"), 0)
+	lead = encodeStream([]byte("before"), (frames[0][0]-1-byte(len(lead)))&frameCount)
+	// The add-on's frames are read whole and with any six in a row missing.
+	for run := 0; run <= frameChecks; run++ {
+		for from := 0; from+run <= len(frames); from++ {
+			var d frameDecoder
+			for _, frame := range lead {
+				d.add(frame)
+			}
+			var data []byte
+			for i, frame := range frames {
+				if i >= from && i < from+run {
+					continue
+				}
+				if out := d.add(frame); out != nil {
+					data = out
+				}
+			}
+			if data == nil {
+				t.Fatalf("the add-on's frames without %d..%d did not complete a packet", from, from+run-1)
+			}
+			r, err := zlib.NewReader(bytes.NewReader(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var gotJSON any
+			json.Unmarshal(body, &gotJSON)
+			if !reflect.DeepEqual(gotJSON, wantJSON) {
+				t.Fatalf("decoded %s\nwant %s", body, want)
+			}
+			if p, err := decodePacket(data); err != nil || p.Type == "" || p.Seq < 1 {
+				t.Fatalf("decodePacket: %+v %v", p, err)
+			}
+		}
 	}
 }
 
@@ -311,6 +417,7 @@ func TestOutboxRescanRecoversAMissedNotification(t *testing.T) {
 	mustPoll(t, o, now)
 	mustPoll(t, o, now.Add(settleFor))
 	frames := encodeFrames(replyJSON, 0)
+	var got []packet
 	for i, frame := range frames {
 		// Longer apart than the time a file is checked without a notification after its last frame.
 		now = now.Add(2 * activeFor)
@@ -323,17 +430,22 @@ func TestOutboxRescanRecoversAMissedNotification(t *testing.T) {
 		if i < len(frames)-1 {
 			o.files[path].pending = true
 		}
-		if len(mustPoll(t, o, now))+len(mustPoll(t, o, now.Add(settleFor))) != 0 {
-			t.Fatal("received a packet before rescanning the missed final frame")
-		}
+		got = append(append(got, mustPoll(t, o, now)...), mustPoll(t, o, now.Add(settleFor))...)
+	}
+	// The packet is whole before its last check frame, so the frames read tell whether the final one was seen.
+	if read := o.files[path].frames.frames; read != len(frames)-1 {
+		t.Fatalf("read %d of %d frames before rescanning the missed final frame", read, len(frames))
 	}
 	now = now.Add(rescanEvery)
 	if err := o.scan(now); err != nil {
 		t.Fatal(err)
 	}
-	mustPoll(t, o, now)
-	if got := mustPoll(t, o, now.Add(settleFor)); len(got) != 1 || got[0].Seq != 7 {
-		t.Fatalf("rescan lost the packet: %+v", got)
+	got = append(append(got, mustPoll(t, o, now)...), mustPoll(t, o, now.Add(settleFor))...)
+	if read := o.files[path].frames.frames; read != len(frames) {
+		t.Fatalf("the rescan did not read the missed final frame: %d of %d", read, len(frames))
+	}
+	if len(got) != 1 || got[0].Seq != 7 {
+		t.Fatalf("the packet did not arrive exactly once: %+v", got)
 	}
 }
 
@@ -513,7 +625,7 @@ func TestOutboxRecognisesAnAutomaticRepeat(t *testing.T) {
 	send := func(json string) []packet {
 		var got []packet
 		for _, f := range encodeFrames(json, counter) {
-			counter = f[0] & 0x7f
+			counter = f[0] & frameCount
 			mtime = mtime.Add(40 * time.Millisecond)
 			os.WriteFile(path, []byte(addOnsText(f)), 0o644)
 			os.Chtimes(path, mtime, mtime)
@@ -590,5 +702,49 @@ func TestOutboxReadsAnArrivingPacketWithoutNotifications(t *testing.T) {
 		t.Fatalf("watcher stopped: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("the packet needed a notification for every frame")
+	}
+}
+
+// A rescan walks the game's folders and reads nothing meanwhile. Beside a game that rewrites AddOns.txt every 40 ms
+// the walk took 126 ms and cost the arriving packet two or three frames, so it waits until the packet is in.
+func TestOutboxDoesNotRescanWhileAPacketArrives(t *testing.T) {
+	old := rescanEvery
+	rescanEvery = 15 * time.Millisecond
+	t.Cleanup(func() { rescanEvery = old })
+	dir := t.TempDir()
+	path := filepath.Join(dir, "AddOns.txt")
+	os.WriteFile(path, []byte(addOnsText([frameBytes]byte{})), 0o600)
+	o := newOutbox(dir)
+	events, errs, out := make(chan fsnotify.Event), make(chan error), make(chan packet, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- o.watch(ctx, events, errs, out) }()
+	time.Sleep(10 * settleFor)
+	for _, frame := range encodeFrames(replyJSON, 0) {
+		if err := os.WriteFile(path, []byte(addOnsText(frame)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		events <- fsnotify.Event{Name: path, Op: fsnotify.Write}
+		time.Sleep(40 * time.Millisecond)
+	}
+	select {
+	case p := <-out:
+		if p.Type != "reply" || p.Seq != 7 {
+			t.Fatalf("wrong packet: %+v", p)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the packet did not arrive")
+	}
+	// The postponed rescan runs once the file has been quiet for a while.
+	time.Sleep(activeFor + 20*settleFor)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if o.busyScans != 0 {
+		t.Fatalf("%d rescans ran while the packet was arriving", o.busyScans)
+	}
+	if !o.scanned || o.receiving(time.Now()) {
+		t.Fatal("the watcher did not go back to rescanning after the packet")
 	}
 }

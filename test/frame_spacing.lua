@@ -36,8 +36,8 @@ for index = 2, #saves do
 end
 assert(closest >= 0.04 - 1e-6, string.format("two frames were written %.0f ms apart", closest * 1000))
 for index = first + 2, #wow.bits do
-    local was, now = wow.bits[index - 1]:byte(1) % 128, wow.bits[index]:byte(1) % 128
-    assert(now == (was + 1) % 128, "the frames keep their order")
+    local was, now = wow.bits[index - 1]:byte(1) % 64, wow.bits[index]:byte(1) % 64
+    assert(now == (was + 1) % 64, "the frames keep their order")
 end
 assert(#wow.bits - first == #saves, "every frame was written once")
 

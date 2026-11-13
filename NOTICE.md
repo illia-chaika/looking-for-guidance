@@ -15,8 +15,9 @@ under the GNU General Public License, version 3. The modifications are distribut
   Blizzard's hotfixes and known issues.
 - Per-character conversations and memory, Shift-click links, colour emoji, appearance and language settings,
   nine interface languages.
-- Transport: 512 one-shot payload channels instead of 128, a bounded polling budget, automatic resend of
-  unacknowledged packets, a minimum spacing between frames, diagnostics for missed frames.
+- Transport: 512 one-shot payload channels instead of 128, a bounded polling budget, a minimum spacing between
+  frames, check frames that rebuild up to six missed frames in a row, automatic resend of unacknowledged packets,
+  diagnostics for missed frames.
 - Claude Code as a second adviser for the game: chosen in the companion's menu, confined to the game data server
   and web reading, with journal research through one-shot jobs.
 - The companion's menu in nine languages, following the system language.

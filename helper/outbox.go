@@ -20,13 +20,15 @@ import (
 )
 
 const (
-	settleFor   = 8 * time.Millisecond
-	rescanEvery = 30 * time.Second
+	settleFor = 8 * time.Millisecond
 	// While frames are arriving the file is also checked on a timer: a late notification would cost a frame.
 	activeFor      = time.Second
 	frameBytes     = bitCount / 8
 	maxPacketBytes = 1 << 20
 )
+
+// A missed notification is caught by reading every AddOns.txt again this often.
+var rescanEvery = 30 * time.Second
 
 type packet struct {
 	Journal       *journalCard `json:"journal,omitempty"`
@@ -81,11 +83,14 @@ type outbox struct {
 	files   map[string]*addonList
 	dirs    map[string]bool
 	seen    map[packetKey]time.Time
-	lost    int
+	missed  int
 	scanned bool
 	// The longest time the watcher went without looking at the files since the last frame, and the last time it looked.
-	pause      time.Duration
-	looked     time.Time
+	pause  time.Duration
+	looked time.Time
+	// Rescans that ran while a packet was arriving. Walking the folders took 126 ms beside a game that was rewriting
+	// AddOns.txt every 40 ms, and each such walk cost the packet two or three frames.
+	busyScans  int
 	watchDir   func(string) error
 	unwatchDir func(string) error
 }
@@ -120,6 +125,8 @@ func (o *outbox) watch(ctx context.Context, events <-chan fsnotify.Event, errs <
 	if err := o.scan(time.Now()); err != nil {
 		return err
 	}
+	// A rescan blocks reading, so it waits until no packet is arriving. The timer reads an active file meanwhile.
+	rescan := false
 	tick := time.NewTicker(rescanEvery)
 	defer tick.Stop()
 	settle := time.NewTimer(settleFor)
@@ -137,9 +144,7 @@ func (o *outbox) watch(ctx context.Context, events <-chan fsnotify.Event, errs <
 			if !errors.Is(err, fsnotify.ErrEventOverflow) {
 				return err
 			}
-			if err := o.scan(time.Now()); err != nil {
-				return err
-			}
+			rescan = true
 		case event, ok := <-events:
 			if !ok {
 				return errors.New("filesystem notifications stopped")
@@ -150,8 +155,8 @@ func (o *outbox) watch(ctx context.Context, events <-chan fsnotify.Event, errs <
 			if strings.EqualFold(filepath.Base(event.Name), "AddOns.txt") {
 				if f := o.files[event.Name]; f != nil {
 					f.pending = true
-				} else if err := o.scan(time.Now()); err != nil {
-					return err
+				} else {
+					rescan = true
 				}
 			} else {
 				changedDir := o.dirs[event.Name]
@@ -169,17 +174,20 @@ func (o *outbox) watch(ctx context.Context, events <-chan fsnotify.Event, errs <
 				if !changedDir {
 					continue
 				}
-				if err := o.scan(time.Now()); err != nil {
-					return err
-				}
+				rescan = true
 			}
-		case now := <-tick.C:
-			if err := o.scan(now); err != nil {
-				return err
-			}
+		case <-tick.C:
+			rescan = true
 		case <-settle.C:
 		}
 		now := time.Now()
+		if rescan && !o.receiving(now) {
+			rescan = false
+			if err := o.scan(now); err != nil {
+				return err
+			}
+			now = time.Now()
+		}
 		if !o.looked.IsZero() {
 			o.pause = max(o.pause, now.Sub(o.looked))
 		}
@@ -202,6 +210,16 @@ func (o *outbox) watch(ctx context.Context, events <-chan fsnotify.Event, errs <
 			}
 		}
 	}
+}
+
+// receiving reports whether a frame arrived a moment ago, so more are probably on the way.
+func (o *outbox) receiving(now time.Time) bool {
+	for _, f := range o.files {
+		if now.Sub(f.frameAt) < activeFor {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *outbox) poll(now time.Time) ([]packet, error) {
@@ -240,6 +258,9 @@ func (o *outbox) poll(now time.Time) ([]packet, error) {
 
 func (o *outbox) scan(now time.Time) error {
 	started := time.Now()
+	if o.receiving(now) {
+		o.busyScans++
+	}
 	found := map[string]bool{}
 	dirs := map[string]bool{}
 	watch := func(path string) error {
@@ -306,13 +327,13 @@ func (o *outbox) scan(now time.Time) error {
 	if took := time.Since(started); took > 20*time.Millisecond {
 		logf("Looking through the game's settings folders took %d ms", took.Milliseconds())
 	}
-	frames, lost, missed, run := 0, 0, 0, 0
+	frames, missed, restored, lost := 0, 0, 0, 0
 	for _, f := range o.files {
-		frames, lost, missed, run = frames+f.frames.frames, lost+f.frames.lost, missed+f.frames.missed, max(run, f.frames.run)
+		frames, missed, restored, lost = frames+f.frames.frames, missed+f.frames.missed, restored+f.frames.restored, lost+f.frames.lost
 	}
-	if lost != o.lost {
-		logf("Game frames: %d read, %d packets lost to %d missed frames so far, at most %d in a row", frames, lost, missed, run)
-		o.lost = lost
+	if missed != o.missed {
+		logf("Game frames: %d read, %d missed, %d rebuilt, %d packets lost so far", frames, missed, restored, lost)
+		o.missed = missed
 	}
 	for key, at := range o.seen {
 		if now.Sub(at) > time.Hour {
@@ -348,20 +369,26 @@ func (o *outbox) read(path string, f *addonList, now time.Time) (packet, error) 
 	if !ok {
 		return packet{}, nil
 	}
-	read := f.frames.frames
+	before := f.frames
 	data := f.frames.add(frame)
 	name, _ := filepath.Rel(o.dir, path)
-	if f.frames.frames != read {
+	if f.frames.frames != before.frames {
 		// The numbers tell the causes apart: a long pause means this app was not running or was busy, a short one
 		// that the frames were not in the file when it looked.
 		if gap := f.frames.gap; gap > 0 {
-			logf("Missed %d frames of a packet from %s: %d ms since the frame before, the watcher's longest pause in that time was %d ms",
+			logf("Missed %d frames from %s: %d ms since the frame before, the watcher's longest pause in that time was %d ms",
 				gap, name, now.Sub(f.frameAt).Milliseconds(), o.pause.Milliseconds())
 		}
 		f.frameAt, o.pause = now, 0
 	}
+	if f.frames.lost != before.lost {
+		logf("Lost a packet from %s: more frames were missed than its check frames can rebuild", name)
+	}
 	if data == nil {
 		return packet{}, nil
+	}
+	if rebuilt := f.frames.restored - before.restored; rebuilt > 0 {
+		logf("Rebuilt %d missed frames; the packet from %s arrived whole", rebuilt, name)
 	}
 	p, err := decodePacket(data)
 	if err != nil {
@@ -409,53 +436,184 @@ func parseFrame(text []byte) ([frameBytes]byte, bool) {
 	return frame, count == bitCount
 }
 
+// The add-on sends a packet as 16-byte frames: a head byte and 15 bytes of the stream (a two-byte length and the
+// compressed packet). After every frameBlock data frames come frameChecks check frames, and after the last, shorter
+// block too. Within a block, the frames whose offsets are equal modulo frameChecks XOR to zero, so any one frame is
+// the XOR of the others in its group: a run of up to frameChecks missed frames is rebuilt. The game writes a frame
+// every 40 ms, and this app has been seen away from the file for 214 ms beside a busy game.
+const (
+	frameBlock  = 48
+	frameChecks = 6
+	frameData   = frameBytes - 1
+	frameStart  = 0x80 // head bit: the packet's first frame
+	frameEnd    = 0x40 // head bit: the packet's last frame
+	frameCount  = 0x3f // head bits: a counter that goes up by one with every frame, across packets
+	maxFrames   = 6000 // more than the longest packet needs
+)
+
 type frameDecoder struct {
 	last    [frameBytes]byte
 	started bool
-	buf     []byte
-	// A frame missed in the middle of a packet loses that packet. The game rewrites AddOns.txt every 40 ms.
-	// The counter in each frame tells how many were missed and how many of them in a row.
-	frames, lost, missed, run int
-	// How many frames were missed just before the latest one, inside a packet.
-	gap int
+	// The packet being received. got holds each frame's data by position, nil where a frame was missed.
+	synced bool // positions are known: the first frame was seen, or the end of the packet before
+	done   bool // the packet was handed over already; the rest of its frames pass by
+	pos    int  // position of the latest frame
+	total  int  // the packet's frame count once it is known
+	got    [][]byte
+	// frames were read, missed did not arrive, restored were rebuilt, lost packets could not be; run is the longest
+	// row of missed frames and gap the number missed just before the latest frame.
+	frames, missed, restored, lost, run, gap int
 }
 
 func (d *frameDecoder) start(frame [frameBytes]byte) {
 	d.last, d.started = frame, true
 }
 
+// add takes the next frame read from AddOns.txt and returns a packet's compressed bytes when one is complete.
 func (d *frameDecoder) add(frame [frameBytes]byte) []byte {
-
 	if d.started && frame == d.last {
 		return nil
 	}
+	step := int((frame[0] - d.last[0]) & frameCount)
+	known := d.started
+	d.last, d.started = frame, true
 	d.frames++
 	d.gap = 0
-	if d.started && frame[0]&0x7f != (d.last[0]+1)&0x7f {
-		if d.buf != nil {
-			d.gap = int((frame[0] - d.last[0] - 1) & 0x7f)
-			d.lost, d.missed, d.run = d.lost+1, d.missed+d.gap, max(d.run, d.gap)
-		}
-		d.buf = nil
-	}
-	d.last, d.started = frame, true
 	switch {
-	case frame[0]&0x80 != 0:
-		d.buf = append([]byte(nil), frame[1:]...)
-	case d.buf != nil:
-		d.buf = append(d.buf, frame[1:]...)
+	case frame[0]&frameStart != 0:
+		d.close()
+		d.synced, d.pos = true, 0
+	case !d.synced || !known || step == 0:
+		d.close()
+		d.synced = false
+		return nil
 	default:
+		d.pos += step
+		if step > 1 {
+			d.gap = step - 1
+			d.missed, d.run = d.missed+d.gap, max(d.run, d.gap)
+		}
+		if d.total > 0 && d.pos >= d.total {
+			// The packet ended among the missed frames. This frame belongs to the next one, whose first frames
+			// were missed with them.
+			pos := d.pos - d.total
+			d.close()
+			d.pos = pos
+		}
+		if d.pos >= maxFrames {
+			d.close()
+			d.synced = false
+			return nil
+		}
+	}
+	if d.done {
 		return nil
 	}
-	if len(d.buf) < 2 {
+	for len(d.got) < d.pos {
+		d.got = append(d.got, nil)
+	}
+	d.got = append(d.got, append([]byte(nil), frame[1:]...))
+	if frame[0]&frameEnd != 0 {
+		if d.total != 0 && d.total != d.pos+1 {
+			return d.drop()
+		}
+		d.total = d.pos + 1
+	}
+	return d.assemble()
+}
+
+// close ends the current packet, counting it as lost when it was never completed.
+func (d *frameDecoder) close() {
+	if d.synced && !d.done && d.got != nil {
+		d.lost++
+	}
+	d.done, d.pos, d.total, d.got = false, 0, 0, nil
+}
+
+// drop gives up a packet whose frames contradict each other and waits for the next first frame.
+func (d *frameDecoder) drop() []byte {
+	d.close()
+	d.synced = false
+	return nil
+}
+
+// assemble returns the packet's bytes once every data frame is there or can be rebuilt.
+func (d *frameDecoder) assemble() []byte {
+	n := d.dataFrames()
+	if n == 0 {
 		return nil
 	}
-	n := int(binary.BigEndian.Uint16(d.buf))
-	if len(d.buf) < 2+n {
-		return nil
+	total := n + frameChecks*((n+frameBlock-1)/frameBlock)
+	if d.total != 0 && d.total != total || len(d.got) > total {
+		return d.drop()
 	}
-	data := d.buf[2 : 2+n]
-	d.buf = nil
+	d.total = total
+	stream := make([]byte, 0, n*frameData)
+	for base, left := 0, n; left > 0; {
+		count := min(left, frameBlock)
+		for offset := range count {
+			data := d.frame(base, count, offset)
+			if data == nil {
+				return nil
+			}
+			stream = append(stream, data...)
+		}
+		base, left = base+count+frameChecks, left-count
+	}
+	size := int(binary.BigEndian.Uint16(stream))
+	if (2+size+frameData-1)/frameData != n {
+		return d.drop()
+	}
+	d.done, d.got = true, nil
+	return stream[2 : 2+size]
+}
+
+// dataFrames tells how many data frames the packet has: from the length in its first frame, or, when that frame was
+// missed, from the position of the last frame or from the first block being a full one.
+func (d *frameDecoder) dataFrames() int {
+	if len(d.got) > 0 && d.got[0] == nil {
+		switch {
+		case d.total > 0:
+			for blocks := 1; ; blocks++ {
+				n := d.total - frameChecks*blocks
+				if n < 1 {
+					d.drop()
+					return 0
+				}
+				if (n+frameBlock-1)/frameBlock == blocks {
+					return n
+				}
+			}
+		case len(d.got) >= frameBlock+frameChecks:
+			d.frame(0, frameBlock, 0)
+		}
+	}
+	if len(d.got) == 0 || d.got[0] == nil {
+		return 0
+	}
+	return (2 + int(binary.BigEndian.Uint16(d.got[0])) + frameData - 1) / frameData
+}
+
+// frame returns the frame at an offset in the block of count data frames that starts at base, rebuilding it from
+// the others of its group when it was missed. It is nil while that is not possible.
+func (d *frameDecoder) frame(base, count, offset int) []byte {
+	if base+offset < len(d.got) && d.got[base+offset] != nil {
+		return d.got[base+offset]
+	}
+	data := make([]byte, frameData)
+	for other := offset % frameChecks; other < count+frameChecks; other += frameChecks {
+		if other == offset {
+			continue
+		}
+		if base+other >= len(d.got) || d.got[base+other] == nil {
+			return nil
+		}
+		for i, b := range d.got[base+other] {
+			data[i] ^= b
+		}
+	}
+	d.got[base+offset] = data
+	d.restored++
 	return data
 }
 

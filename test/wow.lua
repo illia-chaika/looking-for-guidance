@@ -192,6 +192,9 @@ function CopyTable(source)
     return copy
 end
 
+-- The game has a bit library; this harness runs on a Lua with bitwise operators.
+bit = { bxor = function(a, b) return a ~ b end }
+
 C_Timer = {}
 local function timer(seconds, callback, repeating)
     local handle = { due = wow.now + seconds, seconds = seconds, callback = callback, repeating = repeating }
