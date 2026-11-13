@@ -56,6 +56,13 @@ func main() {
 	os.Unsetenv(handoffEnv)
 	os.Unsetenv(movedFromEnv)
 	s := loadSettings()
+	if first := firstAdviser(s.Provider, findInstalled); first != s.Provider {
+		s.Provider = first
+		if err := saveSettings(s); err != nil {
+			logf("Couldn't save settings: %v", err)
+		}
+		logf("No adviser was chosen and only Claude Code is installed: using it")
+	}
 	if exe, from, err := placeApp(&s); err != nil {
 		logf("Couldn't move Looking for Guidance to the folder for apps: %v", err)
 	} else if exe != "" {
@@ -117,7 +124,8 @@ type app struct {
 type trayView struct {
 	status, detail, update string
 	provider, installName  string
-	alert                  bool
+	alert, signIn          bool
+	installOther           bool
 	choose, runWithWoW     bool
 	install, retryAccess   bool
 	check                  updateCheck
@@ -168,11 +176,25 @@ func (a *app) volumeRefused(err error) bool {
 	return true
 }
 
+// firstAdviser settles a setup where nobody chose an adviser and Codex was never used here: with Claude Code
+// installed and no Codex CLI, Claude Code it is, and its owner never has to learn that there is a choice.
+func firstAdviser(chosen string, find func(string) string) string {
+	if chosen != "" || codexProfileExists() || find("codex") != "" || find("claude") == "" {
+		return chosen
+	}
+	return "claude"
+}
+
 func (a *app) poll() {
 	a.mu.Lock()
 	dir, saved, session, retry, denied := a.wowDir, a.settings.WowDir, a.sess, a.retryVolume, a.denied
+	chosen := a.settings.Provider
 	a.retryVolume = false
 	a.mu.Unlock()
+	// Claude Code installed while the app waits with no adviser is picked up the same way as at the start.
+	if first := firstAdviser(chosen, findInstalled); first != chosen {
+		a.setProvider(first)
+	}
 	if session != nil && session.accessDenied() {
 		denied = true
 		a.volumeRefused(os.ErrPermission)
@@ -364,10 +386,12 @@ func (a *app) view() trayView {
 			v.status, v.alert = tr("Sign in to Claude Code"), true
 		case sv.provider == "claude":
 			v.status = tr("Waiting for a character to enter the game")
+		case sv.noAdviser:
+			v.status, v.install, v.installOther, v.alert = tr("No adviser was found"), true, true, true
 		case sv.codex == "missing":
 			v.status, v.install, v.alert = tr("%s was not found", "Codex CLI"), true, true
 		case sv.codex == "signed-out":
-			v.status, v.alert = tr("Sign in to ChatGPT with the Codex CLI"), true
+			v.status, v.alert, v.signIn = tr("Codex is not signed in to ChatGPT"), true, true
 		case sv.hello.IsZero():
 			v.status = tr("Waiting for a character to enter the game")
 		default:
@@ -411,6 +435,16 @@ func (a *app) setProvider(name string) {
 		}
 	}
 	a.publish()
+}
+
+// signIn opens the ChatGPT sign-in page through the running Codex.
+func (a *app) signIn() {
+	a.mu.Lock()
+	sess := a.sess
+	a.mu.Unlock()
+	if sess != nil {
+		sess.signIn()
+	}
 }
 
 func (a *app) setRunWithWoW(on bool) {

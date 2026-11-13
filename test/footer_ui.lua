@@ -51,4 +51,21 @@ assert(meter.note:GetText():find("0%%"))
 assert(meter:GetWidth() + composer.choice:GetWidth() + composer.context:GetWidth() + 16 + 2*T.Kit.space["space-3"] <= composer:GetWidth()+0.01)
 composer:Set({context="Brill", choice="B · x-extra", thread={}, placeholder=""})
 assert(not meter.text:GetText():find("%%") and meter.note:GetText():find("Замер"))
-print("Footer: live model and effort catalog, per-chat next-turn choice, zero/missing telemetry, token counts, pinned tooltip, narrow layout OK")
+assert(not meter.adviser:IsShown() and not meter.limitLabels[1]:IsShown(), "without a known adviser the tooltip says nothing about it")
+
+-- The adviser in use and what is left of its allowance, as far as its provider reports it.
+local plain = meter.tip:GetHeight()
+T.Store.agent = "claude"
+T.Store.limits = { { mins = 300, left = 70, resets = time() + 3600 }, { mins = 10080, left = 83, resets = time() + 86400 }, { mins = 60, left = 5, resets = time() - 10 } }
+composer:Set({context="Brill", choice="Claude Sonnet · medium", thread={agent="claude"}, placeholder=""})
+assert(meter.adviser:IsShown() and meter.adviser:GetText() == "Советник: Claude Code")
+assert(meter.limitLabels[1]:GetText() == "Лимит на 5 ч" and meter.limitValues[1]:GetText() == "осталось 70%")
+assert(meter.limitLabels[2]:GetText() == "Лимит на 7 дн" and meter.limitValues[2]:GetText() == "осталось 83%")
+assert(not meter.limitLabels[3]:IsShown(), "a window past its reset time is out of date and is not shown")
+assert(meter.tip:GetHeight() == plain + 3 * 19, "the tooltip grows by the adviser line and two windows")
+composer:Set({context="Brill", choice="A · medium", thread={agent="codex"}, placeholder=""})
+assert(meter.adviser:GetText() == "Советник: Codex" and not meter.limitLabels[1]:IsShown(), "an older chat of the other adviser does not show this one's allowance")
+T.Store.limits = {}
+composer:Set({context="Brill", choice="Claude Sonnet · medium", thread={agent="claude"}, placeholder=""})
+assert(meter.adviser:IsShown() and not meter.limitLabels[1]:IsShown() and meter.tip:GetHeight() == plain + 19, "a provider that reports nothing shows nothing")
+print("Footer: adviser and allowance in the tooltip, live model and effort catalog, per-chat next-turn choice, zero/missing telemetry, token counts, pinned tooltip, narrow layout OK")

@@ -136,6 +136,62 @@ function T.BuildDataSettings(page, getDraft, changed, preview)
     end
 end
 
+-- How journal research starts and how much of it a day may run. Each job spends the player's own allowance.
+function T.BuildAdviserSettings(page, getDraft, changed)
+    local Insights = T.Insights
+    local title = Kit.Text(page, "t-title", "gold")
+    title:SetPoint("TOPLEFT", 2, 0)
+    T.BindLabel(title, "Исследования журнала")
+    local mode = Kit.Segmented(page, { { value = "click", label = "Только по кнопке" }, { value = "auto", label = "Автоматически" } }, function(value)
+        getDraft().research = value
+        changed()
+    end)
+    local hint = Kit.Text(page, "t-meta", "ink-3")
+    hint:SetWordWrap(true)
+    hint:SetJustifyH("LEFT")
+    local capLabel = Kit.Text(page, "t-ui", "ink")
+    T.BindLabel(capLabel, "Исследований в сутки, не больше")
+    local cap = Kit.Slider(page, Insights.CAP_MIN, Insights.CAP_MAX, 10, function(value)
+        getDraft().researchCap = value
+        changed()
+    end, true, "")
+    -- The adviser itself is chosen on the computer: the page only says which one answers.
+    local adviser = Kit.Text(page, "t-ui", "ink")
+    local where = Kit.Text(page, "t-meta", "ink-3")
+    where:SetWordWrap(true)
+    where:SetJustifyH("LEFT")
+    T.BindLabel(where, "Сменить советника можно в меню Looking for Guidance на компьютере.")
+    function page:Refresh(draft, width)
+        local span = math.min(width - 4, 380)
+        local y = 30
+        mode:SetPoint("TOPLEFT", 2, -y)
+        mode:SetWidth(span)
+        mode:SetValue(draft.research)
+        y = y + mode:GetHeight() + 9
+        T.BindLabel(hint, draft.research == "auto"
+            and "Советник сам готовит сводку исправлений и советы по классу после входа в игру, а остальные разделы — когда ты их открываешь. Каждое исследование расходует лимит твоей подписки."
+            or "Советник готовит раздел, только когда ты нажмёшь в нём кнопку. Каждое исследование расходует лимит твоей подписки.")
+        hint:SetPoint("TOPLEFT", 3, -y)
+        hint:SetWidth(width - 8)
+        y = y + hint:GetStringHeight() + 20
+        capLabel:SetPoint("TOPLEFT", 3, -y)
+        cap:SetPoint("TOPLEFT", 3, -y - 18)
+        cap:SetWidth(span)
+        cap:SetValue(draft.researchCap)
+        y = y + 18 + cap:GetHeight() + 20
+        local agent = T.Store.agent
+        adviser:SetShown(agent ~= nil)
+        if agent then
+            adviser:SetText(T.L("Советник: {1}", agent == "claude" and "Claude Code" or "Codex"))
+            adviser:SetPoint("TOPLEFT", 3, -y)
+            y = y + adviser:GetStringHeight() + 4
+        end
+        where:SetPoint("TOPLEFT", 3, -y)
+        where:SetWidth(width - 8)
+        self:SetHeight(y + where:GetStringHeight() + 8)
+    end
+end
+
 function T.BuildNoticeSettings(page, getDraft, changed)
     local title = Kit.Text(page, "t-title", "gold")
     title:SetPoint("TOPLEFT", 2, 0)

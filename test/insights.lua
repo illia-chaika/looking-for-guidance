@@ -1,10 +1,11 @@
--- Journal research: one request after login, a small load budget, the news card and its badge.
+-- Journal research: nothing unasked by default; with automatic research one request after login, a small load
+-- budget, the news card and its badge.
 local here = arg[0]:match("^(.*)[/\\][^/\\]+$") or "."
 local samples
 local function start(saved)
     local wow = dofile(here .. "/wow.lua")
     samples = samples or wow.Samples(here .. "/../samples/samples.json")
-    looking_for_guidance_settings = saved
+    looking_for_guidance_settings = saved or { research = "auto" }
     wow.slots = 512
     local ready = CopyTable(samples.payloads.ready)
     for _, thread in ipairs(ready.threads) do thread.state, thread.approval = "idle", nil end
@@ -32,6 +33,7 @@ local asked = sentInsights(wow)
 assert(#asked == 1 and asked[1].kind == "digest" and asked[1].key == "me", "one digest request follows the login")
 assert(asked[1].facts.class == "MAGE" and asked[1].facts.level == 33 and asked[1].facts.quests[1].id == 676, "it carries the character's class, level and quests")
 assert(asked[1].facts.name == nil and asked[1].locale == "enUS" and asked[1].gameLocale == "ruRU")
+assert(asked[1].cap == 60, "the daily cap from the settings travels with the request")
 assert(T.Store.Tracked(asked[1].seq), "a background request is confirmed like a chat message, so a lost one can be repeated")
 
 local pending = CopyTable(ready)
@@ -111,13 +113,48 @@ T2.Sync.Check()
 T2.HubOverview.Observe(T2.HubOverview.Cards(T2.HubOverview.Model({})))
 assert(T2.HubOverview.UnreadCount() == 1, "a newer hotfix list is unread again")
 
--- Without unprompted advice nothing is asked at login, and a failure offers a retry.
+-- A fresh install researches only on click: nothing after login, nothing on opening a section, one request per button.
+local wow4, T4 = start({})
+assert(T4.settings.research == "click" and T4.settings.researchCap == 60, "research on click and 60 jobs a day are the defaults")
+wow4.Event("PLAYER_ENTERING_WORLD", true)
+wow4.Run(30)
+assert(#sentInsights(wow4) == 0, "with research on click the login asks nothing")
+T4.Window.Show()
+local function press(w, text)
+    for _, f in ipairs(w.frames) do
+        if f:IsVisible() and f.label and f.label.GetText and f.label:GetText() == text and f:GetScript("OnClick") then f:Fire("OnClick") return true end
+    end
+end
+local function tile(w, text)
+    for _, f in ipairs(w.texts) do
+        if f:IsVisible() and f:GetText() == text and f:GetParent():GetScript("OnClick") then f:GetParent():Fire("OnClick") return true end
+    end
+end
+for _, label in ipairs({ "Where to level", "Bags", "Character check-up", "Gold and training", "What’s new" }) do
+    assert(tile(wow4, label), "the overview has the tile " .. label)
+    assert(#sentInsights(wow4) == 0, "opening " .. label .. " asks nothing")
+    if label ~= "What’s new" then assert(press(wow4, "Back to overview"), "the section leads back to the overview") end
+end
+assert(not T4.Insights.Request("dungeon", "Ragefire Chasm:Horde", { name = "Ragefire Chasm" }, { auto = true }) and #sentInsights(wow4) == 0,
+    "any request marked as unasked is refused")
+assert(press(wow4, "Check now"), "the news card offers its button")
+local clicked = sentInsights(wow4)
+assert(#clicked == 1 and clicked[1].kind == "digest" and not clicked[1].force, "a press asks once, and the first press may be answered from the cache")
+T4.settings.researchCap = 20
+assert(T4.Insights.Request("digest", "y", { level = 1 }) and sentInsights(wow4)[2].cap == 20, "a changed cap goes out with the next request")
+
+-- Turning the overview's marks off does not stop automatic research, and a failure offers a retry.
 saved = CopyTable(T2.settings)
 saved.autoAdvice = false
+local wow5 = start(saved)
+wow5.Event("PLAYER_ENTERING_WORLD", true)
+wow5.Run(30)
+assert(#sentInsights(wow5) == 1, "automatic research does not depend on the overview's unread marks")
+saved.research = "click"
 local wow3, T3, ready3 = start(saved)
 wow3.Event("PLAYER_ENTERING_WORLD", true)
 wow3.Run(30)
-assert(#sentInsights(wow3) == 0, "with auto advice off the login asks nothing")
+assert(#sentInsights(wow3) == 0, "with research on click the login asks nothing")
 local failed = CopyTable(ready3)
 failed.rev = ready3.rev + 1
 failed.insights = { { kind = "digest", key = "me", state = "failed", note = "hotfix list unavailable" } }
@@ -152,4 +189,4 @@ wow3.Run(4)
 assert(#wow3.bits - frames == 2 * once, "the same frames went out exactly twice")
 assert(T3.Store.Delivery(lostSeq) == "delivered" and T3.Insights.State("digest", "x") == "ready", "the repeated request is confirmed and answered")
 assert(#sentInsights(wow3) == 1, "the repeat reuses the same envelope: the helper sees one sequence number")
-print("Insights: login digest, three-load budget, news card, copyable source, forced recheck, persisted unread, failure, combat deferral and automatic repeat of a lost request OK")
+print("Insights: research on click by default, login digest, three-load budget, news card, copyable source, forced recheck, persisted unread, failure, combat deferral and automatic repeat of a lost request OK")

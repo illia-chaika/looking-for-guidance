@@ -45,13 +45,39 @@ local function addMeter(frame, choice)
     note:SetWidth(222)
     note:SetJustifyH("LEFT")
     note:SetWordWrap(true)
+    local adviser = Kit.Text(tip, "t-ui", "ink-2")
+    local limitLabels, limitValues = {}, {}
+    for i = 1, 3 do
+        limitLabels[i] = Kit.Text(tip, "t-ui", "ink-2")
+        limitValues[i] = Kit.Text(tip, "t-ui", "ink")
+    end
+    -- The adviser this chat talks to and what is left of its allowance, where its provider reports that.
+    -- A window past its reset time is out of date and is left out.
+    local function allowance(thread)
+        local agent = thread and thread.agent or T.Store.agent
+        local rows = {}
+        if agent and agent == T.Store.agent then
+            for _, limit in ipairs(T.Store.limits or {}) do
+                local mins, left, resets = tonumber(limit.mins), tonumber(limit.left), tonumber(limit.resets)
+                if mins and left and #rows < 3 and not (resets and resets < time()) then
+                    rows[#rows + 1] = { mins < 1440 and L("Лимит на {1} ч", math.floor(mins / 60 + .5))
+                        or L("Лимит на {1} дн", math.floor(mins / 1440 + .5)), L("осталось {1}%", left) }
+                end
+            end
+        end
+        return agent and (agent == "claude" and "Claude Code" or "Codex"), rows
+    end
     function meter:SetUsage(thread)
         local pct = thread and tonumber(thread.contextLeft)
         local used = thread and tonumber(thread.contextUsed)
         local window = thread and tonumber(thread.contextWindow)
         local locale = T.GetUILocale()
-        if self.hasDrawn and self.pct == pct and self.used == used and self.window == window and self.locale == locale then return end
-        self.locale = locale
+        local name, rows = allowance(thread)
+        local shown = name or ""
+        for _, row in ipairs(rows) do shown = shown .. "\n" .. row[1] .. row[2] end
+        if self.hasDrawn and self.pct == pct and self.used == used and self.window == window and self.locale == locale
+            and self.shown == shown then return end
+        self.locale, self.shown = locale, shown
         self.hasDrawn, self.pct, self.used, self.window = true, pct, used, window
         local measured = used and used >= 0 and window and window > 0
         for i = 1, #marks do
@@ -68,9 +94,31 @@ local function addMeter(frame, choice)
         elseif self.pct ~= nil then
             note:SetText(L("Свободно {1}%. Точное число токенов недоступно.", self.pct))
         else
-            note:SetText(L("Замер появится, когда Codex сообщит расход токенов."))
+            note:SetText(L("Замер появится, когда советник сообщит расход токенов."))
         end
-        tip:SetHeight((measured and 100 or 33) + Kit.TextHeight(note) + 10)
+        local y = (measured and 100 or 33) + Kit.TextHeight(note) + 8
+        adviser:SetShown(name ~= nil)
+        if name then
+            adviser:ClearAllPoints()
+            adviser:SetPoint("TOPLEFT", 11, -y)
+            adviser:SetText(L("Советник: {1}", name))
+            y = y + 19
+        end
+        for i = 1, #limitLabels do
+            local row = rows[i]
+            limitLabels[i]:SetShown(row ~= nil)
+            limitValues[i]:SetShown(row ~= nil)
+            if row then
+                limitLabels[i]:ClearAllPoints()
+                limitLabels[i]:SetPoint("TOPLEFT", 11, -y)
+                limitLabels[i]:SetText(row[1])
+                limitValues[i]:ClearAllPoints()
+                limitValues[i]:SetPoint("TOPRIGHT", -11, -y)
+                limitValues[i]:SetText(row[2])
+                y = y + 19
+            end
+        end
+        tip:SetHeight(y + 2)
     end
     meter:HookScript("OnEnter", function() tip:Show() end)
     meter:HookScript("OnLeave", function() if not tip.pinned then tip:Hide() end end)
@@ -80,6 +128,7 @@ local function addMeter(frame, choice)
     tip:HookScript("OnHide", function(self) self.pinned = false end)
     meter:HookScript("OnHide", function() tip:Hide() end)
     meter.tip, meter.numbers, meter.note = tip, numbers, note
+    meter.adviser, meter.limitLabels, meter.limitValues = adviser, limitLabels, limitValues
     return meter
 end
 

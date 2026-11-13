@@ -90,7 +90,7 @@ func TestClaudeModelsRequireInstalledAndSignedIn(t *testing.T) {
 	t.Setenv("LOOKING_FOR_GUIDANCE_AUTH_FAILED", "1")
 	s := newSession("", nil, func() {})
 	s.codex = "signed-out"
-	if note := s.payload().Note; note != "Войди в ChatGPT через Codex CLI в игровом профиле." {
+	if note := s.payload().Note; note != "Войди в ChatGPT: выбери «Войти в ChatGPT…» в меню Looking for Guidance." {
 		t.Fatalf("signed-out Codex note: %q", note)
 	}
 	s.codex = "missing"

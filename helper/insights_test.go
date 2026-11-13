@@ -180,16 +180,51 @@ func TestInsightWaitsForCodexAndAdoptsALeftoverResult(t *testing.T) {
 func TestInsightDailyCap(t *testing.T) {
 	e, _, _ := testEngine(t, func(*insightJob, string) (string, error) { return `{"headline":"x","items":[]}`, nil })
 	for i := 0; i < insightDailyCap; i++ {
-		if !e.spend() {
+		if !e.spend(0) {
 			t.Fatalf("run %d refused", i)
 		}
 	}
-	if e.spend() {
+	if e.spend(0) {
 		t.Fatal("the daily cap did not hold")
 	}
 	e.request(insightRequest{Kind: "digest", Key: "me", Locale: "enUS", Character: "Player-1-0A", Facts: json.RawMessage(warlockFacts)})
 	if got := waitInsight(t, e, "digest", "failed"); !strings.Contains(got.Note, "daily limit") {
 		t.Fatalf("note: %q", got.Note)
+	}
+}
+
+// The player's own cap comes with each request. It can be lower or higher than the default, never past the helper's limit.
+func TestInsightDailyCapFollowsThePlayersSetting(t *testing.T) {
+	answer := func(*insightJob, string) (string, error) { return `{"headline":"x","items":[]}`, nil }
+	e, _, _ := testEngine(t, answer)
+	for i := 0; i < 20; i++ {
+		e.spend(20)
+	}
+	if e.spend(20) {
+		t.Fatal("a cap of 20 allowed a 21st run")
+	}
+	e.request(insightRequest{Kind: "digest", Key: "me", Locale: "enUS", Character: "Player-1-0A", Cap: 20, Facts: json.RawMessage(warlockFacts)})
+	if got := waitInsight(t, e, "digest", "failed"); !strings.Contains(got.Note, "daily limit") {
+		t.Fatalf("a request carrying the lower cap ran past it: %+v", got)
+	}
+	if !e.spend(30) {
+		t.Fatal("raising the cap the same day did not allow another run")
+	}
+
+	wide, _, _ := testEngine(t, answer)
+	for i := 0; i < insightCapLimit; i++ {
+		if !wide.spend(100000) {
+			t.Fatalf("run %d refused below the helper's limit", i)
+		}
+	}
+	if wide.spend(100000) {
+		t.Fatal("a packet from the game lifted the cap past the helper's limit")
+	}
+
+	// The packet's own field reaches the engine.
+	var p packet
+	if err := json.Unmarshal([]byte(`{"type":"insight","kind":"digest","key":"me","cap":40}`), &p); err != nil || p.Cap != 40 {
+		t.Fatalf("cap in the packet: %d, %v", p.Cap, err)
 	}
 }
 

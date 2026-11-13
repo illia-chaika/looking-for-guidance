@@ -19,7 +19,7 @@ local function ask(m, c, options)
 end
 
 Hub.Extend("dungeon", {
-    open = function(m, c) ask(m, c) end,
+    open = function(m, c) ask(m, c, { auto = true }) end,
     build = function(m, c)
         if not c or not c.dungeon then return c end
         local rows = {}

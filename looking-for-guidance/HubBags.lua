@@ -137,7 +137,7 @@ Hub.Extend("bags", {
     tile = { subtitle = "Что продать, убрать и оставить" },
     open = function(m)
         active, dirty = true, true
-        ask(m)
+        ask(m, { auto = true })
     end,
     build = function(m, c)
         if not c or not allowed("bags") or not C_Container then return c end

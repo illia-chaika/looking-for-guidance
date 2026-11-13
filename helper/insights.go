@@ -21,10 +21,11 @@ import (
 // a JSON answer checked here, and a cache on disk. Nothing of it appears among the player's conversations.
 const (
 	insightModel      = "gpt-6.1-sol"
-	insightClaude     = "sonnet"
+	insightClaude     = "opus"
 	insightTimeout    = 5 * time.Minute
 	insightRetryAfter = 10 * time.Minute
-	insightDailyCap   = 60
+	insightDailyCap   = 60  // when the game names no cap of its own
+	insightCapLimit   = 200 // the most a setting in the game can allow
 	insightKeep       = 30 * 24 * time.Hour
 	insightParallel   = 2
 	maxInsightFacts   = 8 << 10
@@ -45,7 +46,9 @@ type insight struct {
 type insightRequest struct {
 	Kind, Key, Locale, GameLocale, Character string
 	Force                                    bool
-	Facts                                    json.RawMessage
+	// Cap is the player's own daily limit of research runs, sent with every request from the game's settings.
+	Cap   int
+	Facts json.RawMessage
 }
 
 // insightEnv is what a job may use besides the add-on's facts.
@@ -93,7 +96,9 @@ type insightEngine struct {
 	fetch func(context.Context, string) (string, error)
 	notes func(character string) []string
 	run   func(ctx context.Context, job *insightJob, prompt, schemaPath, outPath string) error
-	now   func() time.Time
+	// limits receives what Claude Code says about the allowance while it runs a job.
+	limits func([]payloadLimit)
+	now    func() time.Time
 
 	mu        sync.Mutex
 	character string
@@ -300,7 +305,7 @@ func (e *insightEngine) execute(job *insightJob) {
 }
 
 func (e *insightEngine) research(job *insightJob) (insightRecord, error) {
-	if !e.spend() {
+	if !e.spend(job.req.Cap) {
 		return insightRecord{}, errors.New("daily limit of background checks reached")
 	}
 	prompt, err := job.kind.prompt(job.req, job.env)
@@ -349,7 +354,7 @@ func (e *insightEngine) exec(ctx context.Context, job *insightJob, prompt, schem
 		if path == "" {
 			return errors.New("Claude Code is not signed in")
 		}
-		return execClaude(ctx, path, job, prompt, schemaPath, outPath)
+		return execClaude(ctx, path, job, prompt, schemaPath, outPath, e.limits)
 	}
 	if path == "" {
 		return errors.New("Codex CLI not found")
@@ -359,7 +364,7 @@ func (e *insightEngine) exec(ctx context.Context, job *insightJob, prompt, schem
 
 // execClaude runs one Claude Code turn with no tools but web search and page reading, none of the user's own setup,
 // and no saved session. The answer must match the job's schema; the check in accept decides either way.
-func execClaude(ctx context.Context, path string, job *insightJob, prompt, schemaPath, outPath string) error {
+func execClaude(ctx context.Context, path string, job *insightJob, prompt, schemaPath, outPath string, onLimits func([]payloadLimit)) error {
 	schema, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return err
@@ -376,7 +381,13 @@ func execClaude(ctx context.Context, path string, job *insightJob, prompt, schem
 	var run agentProcess
 	err = run.start(path, filepath.Dir(outPath), args, func(line []byte) {
 		var m claudeMessage
-		if json.Unmarshal(line, &m) == nil && m.Type == "result" {
+		if json.Unmarshal(line, &m) != nil {
+			return
+		}
+		if m.Type == "rate_limit_event" && onLimits != nil {
+			onLimits(m.RateLimit.windows())
+		}
+		if m.Type == "result" {
 			select {
 			case answer <- m:
 			default:
@@ -462,8 +473,16 @@ func lastLine(s string) string {
 	return lines[len(lines)-1]
 }
 
-// spend counts runs per day. A card that kept asking by mistake must not drain the player's Codex allowance.
-func (e *insightEngine) spend() bool {
+// dailyCap is the player's limit within what the helper allows: a packet from the game cannot lift it past that.
+func dailyCap(asked int) int {
+	if asked <= 0 {
+		return insightDailyCap
+	}
+	return min(asked, insightCapLimit)
+}
+
+// spend counts runs per day. A card that kept asking by mistake must not drain the player's allowance.
+func (e *insightEngine) spend(limit int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	path := filepath.Join(e.dir, "usage.json")
@@ -478,7 +497,7 @@ func (e *insightEngine) spend() bool {
 	if usage.Day != today {
 		usage.Day, usage.Count = today, 0
 	}
-	if usage.Count >= insightDailyCap {
+	if usage.Count >= dailyCap(limit) {
 		return false
 	}
 	usage.Count++

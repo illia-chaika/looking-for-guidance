@@ -34,7 +34,7 @@ def stopped_companion(support, exe):
         try:
             fcntl.flock(tray, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise SystemExit('Закрой Looking for Guidance через его меню перед обновлением.')
+            raise SystemExit('Quit Looking for Guidance from its menu before updating.')
         watcher = stack.enter_context((support / 'watch.lock').open('a+'))
         try:
             fcntl.flock(watcher, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -54,7 +54,7 @@ def stopped_companion(support, exe):
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise SystemExit('Не удалось остановить старый watcher. Обновление отменено до замены приложения.')
+                        raise SystemExit('The old watcher did not stop. The update was cancelled before the app was replaced.')
                     time.sleep(0.05)
         yield
 
@@ -76,7 +76,7 @@ def load_manifest(bundle):
             if (any(not part or part.startswith('.') for part in parts) or
                 any(ch in name for ch in ('\\', ':', '\x00')) or normalized in seen or
                 not isinstance(digest, str) or not re.fullmatch('[0-9a-f]{64}', digest)):
-                raise ValueError('Недопустимая запись в списке файлов аддона: ' + repr(name))
+                raise ValueError('Invalid entry in the add-on file list: ' + repr(name))
             result[name] = digest
             seen.add(normalized)
         return result
@@ -84,7 +84,7 @@ def load_manifest(bundle):
     path = bundle / 'Contents/Resources/addon-files.json'
     manifest = json.loads(path.read_text(), object_pairs_hook=load_paths)
     if not isinstance(manifest, dict) or 'looking-for-guidance.toc' not in manifest:
-        raise ValueError('В списке файлов аддона отсутствует looking-for-guidance.toc.')
+        raise ValueError('The add-on file list has no looking-for-guidance.toc.')
     return manifest
 
 
@@ -93,10 +93,10 @@ def stage_addon(bundle, target, manifest):
     with zipfile.ZipFile(bundle / 'Contents/Resources/addon-payload.zip') as archive:
         entries = archive.infolist()
         if len(entries) != len(manifest) or {item.filename for item in entries} != set(manifest):
-            raise ValueError('Файлы ZIP не соответствуют манифесту подписанного приложения.')
+            raise ValueError('The files in the ZIP do not match the manifest of the signed app.')
         for entry in entries:
             if entry.orig_filename != entry.filename or entry.is_dir() or stat.S_IFMT(entry.external_attr >> 16) not in (0, stat.S_IFREG):
-                raise ValueError('ZIP содержит нестандартный тип файла: ' + repr(entry.filename))
+                raise ValueError('The ZIP holds an unusual kind of file: ' + repr(entry.filename))
             destination = target / entry.filename
             destination.parent.mkdir(parents=True, exist_ok=True)
             with archive.open(entry) as source, destination.open('xb') as output:
@@ -108,7 +108,7 @@ def verify_addon(target, manifest):
     for name, expected in manifest.items():
         path = target / name
         if not path.is_file() or path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-            raise ValueError('Контрольная сумма файла аддона не совпадает: ' + name)
+            raise ValueError('The checksum of an add-on file does not match: ' + name)
 
 
 def replace_pair(installed, next_app, backup_app, current_addon, new_addon, old_addon, manifest):
@@ -133,16 +133,16 @@ def archive_failed_update(pending, backups):
         return
     log = pending / 'install.log'
     lines = log.read_text(errors='replace').splitlines() if log.is_file() else []
-    terminal = ('Новое приложение установлено, но файлы WoW не подтверждены.',
-                'Локальное обновление не завершилось:')
+    terminal = ('The new app is installed, but the files in WoW are not confirmed.',
+                'The local update did not finish:')
     if not lines or not lines[-1].startswith(terminal):
-        raise SystemExit('Уже подготовлено обновление. Проверь ' + str(log))
+        raise SystemExit('An update is already prepared. Check ' + str(log))
     clients = subprocess.check_output(['/bin/ps', '-U', str(os.getuid()), '-o', 'command='], text=True)
     if any('install-local-macos.py --apply-pending' in row for row in clients.splitlines()):
-        raise SystemExit('Предыдущий установщик ещё запущен.')
+        raise SystemExit('The previous installer is still running.')
     archive = Path(tempfile.mkdtemp(prefix='previous-pending-', dir=backups)) / 'pending-local-update'
     os.rename(pending, archive)
-    print('Сохранён предыдущий пакет и журнал установки:', archive, flush=True)
+    print('Kept the previous package and its install log:', archive, flush=True)
 
 
 def quit_idle_tray(game, installed):
@@ -166,7 +166,7 @@ def quit_idle_tray(game, installed):
         if running or not tray:
             return
         time.sleep(.2)
-    raise SystemExit('Companion не подтвердил обычное завершение. Закрой приложение через его меню.')
+    raise SystemExit('The companion did not confirm a normal exit. Quit the app from its menu.')
 
 
 def install(args, support):
@@ -175,7 +175,7 @@ def install(args, support):
     config = json.loads((support / 'settings.json').read_text())
     game = Path(config['wowDir']).resolve(strict=True)
     if game.name != '_forever_' or 'wowf' not in (game / '.flavor.info').read_text().splitlines():
-        raise SystemExit('Путь не указывает на настроенный клиент Forever.')
+        raise SystemExit('The path is not the configured Forever client.')
     pending = support / 'pending-local-update'
     built = (pending if args.apply_pending else repo / 'dist') / installed.name
     backups = support / 'local-build-backups'
@@ -183,7 +183,7 @@ def install(args, support):
     for bundle in (built, installed):
         with (bundle / 'Contents/Info.plist').open('rb') as source:
             if plistlib.load(source)['CFBundleIdentifier'] != 'io.github.illia-chaika.looking-for-guidance':
-                raise SystemExit(f'Неожиданный идентификатор {bundle}.')
+                raise SystemExit(f'Unexpected bundle identifier {bundle}.')
     cmd('/usr/bin/codesign', '--verify', '--deep', '--strict', built)
     manifest = load_manifest(built)
     if not args.apply_pending:
@@ -201,22 +201,22 @@ def install(args, support):
                 child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), *flags],
                                          stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             rollback.pop_all()
-        print('Обновление подготовлено. Установщик дождётся выхода из WoW и Companion.', flush=True)
-        print('PID:', child.pid, 'Журнал:', pending / 'install.log', flush=True)
+        print('The update is prepared. The installer waits for WoW and the companion to quit.', flush=True)
+        print('PID:', child.pid, 'Log:', pending / 'install.log', flush=True)
         return
     if args.apply_pending:
         while running or (tray and not args.quit_idle_tray):
             time.sleep(3)
             running, tray = open_clients(game, installed)
     if running:
-        raise SystemExit('WoW открыт; закрой игру перед установкой.')
+        raise SystemExit('WoW is open; quit the game before installing.')
     if tray and not args.quit_idle_tray:
-        raise SystemExit('Прежде чем обновить, закрой старый Looking for Guidance через его меню.')
+        raise SystemExit('Quit the old Looking for Guidance from its menu before updating.')
 
     add_ons = game / 'Interface/AddOns'
     current_addon = add_ons / 'looking-for-guidance'
     if add_ons.resolve(strict=True) != add_ons or current_addon.is_symlink():
-        raise SystemExit('Папка аддона перенаправлена; проверь путь к настроенному клиенту.')
+        raise SystemExit('The add-on folder is redirected; check the path of the configured client.')
     with tempfile.TemporaryDirectory(prefix='.forever-update-', dir=installed.parent) as app_stage, \
          tempfile.TemporaryDirectory(prefix='.forever-update-', dir=add_ons) as addon_stage:
         next_app = Path(app_stage) / installed.name
@@ -228,18 +228,18 @@ def install(args, support):
             quit_idle_tray(game, installed)
         with stopped_companion(support, str(installed / 'Contents/MacOS/LookingForGuidance')):
             if any(open_clients(game, installed)):
-                raise SystemExit('WoW или Companion снова открылся. Повтори установку после выхода.')
+                raise SystemExit('WoW or the companion opened again. Install again after quitting them.')
             stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
             backup = Path(tempfile.mkdtemp(prefix=stamp+'-', dir=backups))
             if current_addon.is_dir():
                 cmd('/usr/bin/ditto', current_addon, backup / current_addon.name)
             if any(open_clients(game, installed)):
-                raise SystemExit('Клиент снова запустился во время подготовки установки.')
+                raise SystemExit('The client started again while the install was being prepared.')
             replace_pair(installed, next_app, backup / installed.name, current_addon,
                          new_addon, Path(addon_stage) / 'old-addon', manifest)
-    print('Предыдущая сборка и аддон:', backup)
-    print('Приложение:', installed)
-    print('Сверены все установленные файлы аддона:', len(manifest), flush=True)
+    print('Previous build and add-on:', backup)
+    print('App:', installed)
+    print('All installed add-on files verified:', len(manifest), flush=True)
     if args.apply_pending:
         shutil.rmtree(built)
         os.rename(pending / 'install.log', backup / 'install.log')
@@ -259,12 +259,12 @@ def main():
         try:
             fcntl.flock(lock, mode)
         except BlockingIOError:
-            raise SystemExit('Одноразовый установщик уже запущен.')
+            raise SystemExit('A one-off installer is already running.')
         try:
             install(args, support)
         except (Exception, SystemExit) as exc:
             if args.apply_pending:
-                print('Локальное обновление не завершилось:', exc, flush=True)
+                print('The local update did not finish:', exc, flush=True)
                 raise SystemExit(1)
             raise
 

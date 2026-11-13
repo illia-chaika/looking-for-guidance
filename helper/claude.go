@@ -114,6 +114,7 @@ type claudeMessage struct {
 		} `json:"content"`
 		Usage *claudeUsage `json:"usage"`
 	} `json:"message"`
+	RateLimit  claudeRateLimit `json:"rate_limit_info"`
 	Result     string          `json:"result"`
 	Structured json.RawMessage `json:"structured_output"`
 	IsError    bool            `json:"is_error"`
@@ -130,11 +131,11 @@ func claudeModels(codexDefault bool) []payloadModel {
 	}
 }
 
-// The gameplay adviser answers many short questions, so the faster model is the default and the larger one a choice.
+// The gameplay adviser starts with the larger model; the faster one is a choice for those who watch their allowance.
 func claudeGameModels() []payloadModel {
 	return []payloadModel{
-		{ID: claudePrefix + "sonnet", Label: "Claude Sonnet", Default: true, Effort: "medium", Efforts: claudeEfforts},
-		{ID: claudePrefix + "opus", Label: "Claude Opus", Effort: "medium", Efforts: claudeEfforts},
+		{ID: claudePrefix + "opus", Label: "Claude Opus", Default: true, Effort: "medium", Efforts: claudeEfforts},
+		{ID: claudePrefix + "sonnet", Label: "Claude Sonnet", Effort: "medium", Efforts: claudeEfforts},
 	}
 }
 
@@ -531,6 +532,10 @@ func (s *session) claudeEvent(t *claudeThread, r *claudeRun, line []byte) {
 	}
 	s.dirty = true
 	switch m.Type {
+	case "rate_limit_event":
+		if list := m.RateLimit.windows(); len(list) > 0 {
+			s.claudeLimits = list
+		}
 	case "system":
 		t.Started = t.Started || m.Subtype == "init"
 	case "assistant":

@@ -3,7 +3,7 @@ local here = arg[0]:match("^(.*)[/\\][^/\\]+$") or "."
 local wow = dofile(here .. "/wow.lua")
 wow.payload = wow.Samples(here .. "/../samples/samples.json").payloads.ready
 local T = wow.Load(here .. "/../looking-for-guidance")
-local files = { "HubCheckup.lua", "HubNews.lua", "HubQuestCheck.lua", "HubGold.lua", "HubDungeon.lua", "HubBags.lua", "HubLeveling.lua", "Insights.lua" }
+local files = { "HubCheckup.lua", "HubNews.lua", "HubQuestCheck.lua", "HubGold.lua", "HubDungeon.lua", "HubBags.lua", "HubLeveling.lua", "Insights.lua", "SettingsPages.lua", "Composer.lua" }
 local missing, seen, count = {}, {}, 0
 local function need(key, file)
     if seen[key] or not key:find("[\208\209]") then return end
@@ -27,6 +27,13 @@ for _, file in ipairs(files) do
         for key in source:gmatch('"([^"\n]*)"') do need(key, file) end
     end
 end
+-- The companion's notes about the adviser's state are shown in the player's language too.
+local notes = io.open(here .. "/../helper/session.go"):read("*a"):match("var codexNotes.-\ntype session struct")
+local noteCount = 0
+for key in notes:gmatch('"([^"\n]*)"') do
+    if key:find("[\208\209]") then noteCount = noteCount + 1; need(key, "helper/session.go") end
+end
+assert(noteCount == 7, "the adviser state notes were not found in helper/session.go: " .. noteCount)
 need("Касается тебя напрямую", "HubNews.lua")
 need("Полезно знать", "HubNews.lua")
 need("Проверено: {1}", "HubPage.lua")

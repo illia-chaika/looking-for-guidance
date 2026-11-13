@@ -72,11 +72,18 @@ var menuTexts = map[string][8]string{
 	"Install %s…": {
 		"Установить %s…", "%s installieren…", "Installer %s…", "Instalar %s…", "Instalar %s…", "%s 설치…",
 		"安装 %s…", "安裝 %s…"},
-	"Sign in to ChatGPT with the Codex CLI": {
-		"Войди в ChatGPT через Codex CLI", "Melde dich über die Codex CLI bei ChatGPT an",
-		"Connecte-toi à ChatGPT avec la CLI Codex", "Inicia sesión en ChatGPT con la CLI de Codex",
-		"Entre no ChatGPT pela CLI do Codex", "Codex CLI로 ChatGPT에 로그인하세요",
-		"请通过 Codex CLI 登录 ChatGPT", "請透過 Codex CLI 登入 ChatGPT"},
+	"Codex is not signed in to ChatGPT": {
+		"Codex не вошёл в ChatGPT", "Codex ist nicht bei ChatGPT angemeldet", "Codex n’est pas connecté à ChatGPT",
+		"Codex no ha iniciado sesión en ChatGPT", "O Codex não está conectado ao ChatGPT",
+		"Codex가 ChatGPT에 로그인되어 있지 않음", "Codex 尚未登录 ChatGPT", "Codex 尚未登入 ChatGPT"},
+	// The add-on quotes these words in its own note about signing in (SmartStrings.lua).
+	"Sign in to ChatGPT…": {
+		"Войти в ChatGPT…", "Bei ChatGPT anmelden…", "Se connecter à ChatGPT…", "Iniciar sesión en ChatGPT…",
+		"Entrar no ChatGPT…", "ChatGPT에 로그인…", "登录 ChatGPT…", "登入 ChatGPT…"},
+	"No adviser was found": {
+		"Не найден ни один советник", "Kein Ratgeber gefunden", "Aucun conseiller trouvé",
+		"No se encontró ningún asesor", "Nenhum conselheiro encontrado", "조언자를 찾을 수 없음",
+		"未找到任何顾问", "找不到任何顧問"},
 	"Sign in to Claude Code": {
 		"Войди в Claude Code", "Melde dich bei Claude Code an", "Connecte-toi à Claude Code",
 		"Inicia sesión en Claude Code", "Entre no Claude Code", "Claude Code에 로그인하세요",

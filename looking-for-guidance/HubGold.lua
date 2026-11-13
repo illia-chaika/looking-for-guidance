@@ -32,7 +32,7 @@ end
 
 Hub.Extend("trainer", {
     tile = { label = "Золото и обучение", subtitle = "Цены тренера и путь к маунту" },
-    open = function() Data.AskBrief() end,
+    open = function() Data.AskBrief({ auto = true }) end,
     build = function(m, c)
         if not c or not allowed("spells") then return c end
         local rows = {}
@@ -135,6 +135,10 @@ Hub.Extend("trainer", {
             rows[#rows + 1] = { kind = "pending", text = L("Собираю советы по твоему классу…"), since = found.since }
         elseif state == "failed" then
             rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("Советы по классу сейчас недоступны.") .. " " .. (found.note or "") }
+        elseif Data.CanBrief() then
+            rows[#rows + 1] = { kind = "text", style = "t-ui", ink = "detail",
+                text = L("Советник соберёт для твоего класса и уровня приоритет характеристик, классовые задания и ранги, которые стоит купить или пропустить.") }
+            rows[#rows + 1] = { kind = "actions", actions = { { label = L("Собрать советы по классу"), primary = true, click = function() Data.AskBrief() end } } }
         end
         return c
     end,

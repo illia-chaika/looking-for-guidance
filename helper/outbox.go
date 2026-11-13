@@ -64,6 +64,7 @@ type packet struct {
 	Locale     string          `json:"locale,omitempty"`
 	GameLocale string          `json:"gameLocale,omitempty"`
 	Force      bool            `json:"force,omitempty"`
+	Cap        int             `json:"cap,omitempty"`
 	Facts      json.RawMessage `json:"facts,omitempty"`
 
 	RunID  string `json:"runId,omitempty"`

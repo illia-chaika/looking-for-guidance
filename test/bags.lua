@@ -85,12 +85,14 @@ assert(row(c, "Johaan's Findings").state == "done" and row(c, "Johaan's Findings
 assert(c.rows[1].kind == "verdict" and c.rows[1].title == "A vendor will free 3 slots" and c.rows[1].text == "About 0g 3s 47c in coin.")
 assert(c.summary == "Slots you can free: 3" and row(c, "Broken Fang ×3").link:find("item:117", 1, true))
 
+assert(#sent() == 0 and c.rows[#c.rows].kind == "actions", "with research on click, opening the card asks nothing and offers a button")
+button("Judge the remaining items"):Fire("OnClick")
 local asked = sent()
-assert(#asked == 1 and #asked[1].facts.items == 3, "opening the card sends only what the client could not judge")
+assert(#asked == 1 and #asked[1].facts.items == 3, "the button sends only what the client could not judge")
 local first = asked[1].facts.items[1]
 assert(first.id == 2589 and first.n == 26 and first.type == "Trade Goods" and first.sell == 13 and asked[1].facts.class == "WARLOCK")
 assert(asked[1].facts.items[3].tip == "Use: Restores 58 health over 18 sec.", "the item's own tooltip text travels with it, so the helper judges its real effect")
-assert(c.rows[#c.rows].kind == "pending")
+assert(card().rows[#card().rows].kind == "pending")
 
 local payload = CopyTable(ready)
 payload.rev = ready.rev + 1

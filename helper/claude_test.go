@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -210,7 +211,7 @@ func TestClaudeAnswersAGameplayQuestion(t *testing.T) {
 	h.s.projectDir, h.s.provider, h.s.codex = game, "claude", "missing"
 
 	p := h.payload()
-	if len(p.Models) != 2 || p.Models[0].ID != "claude:sonnet" || !p.Models[0].Default || p.Models[0].Effort != "medium" || p.Codex != "ready" || p.Note != "" || p.Agent != "claude" {
+	if len(p.Models) != 2 || p.Models[0].ID != "claude:opus" || !p.Models[0].Default || p.Models[0].Effort != "medium" || p.Models[1].ID != "claude:sonnet" || p.Models[1].Default || p.Codex != "ready" || p.Note != "" || p.Agent != "claude" {
 		t.Fatalf("Claude Code is the adviser, signed in: codex=%q note=%q models=%+v", p.Codex, p.Note, p.Models)
 	}
 
@@ -237,6 +238,10 @@ func TestClaudeAnswersAGameplayQuestion(t *testing.T) {
 	if h.s.owners[th.ID] != "Player-1-ABC" {
 		t.Fatalf("the chat belongs to the character who asked: %v", h.s.owners)
 	}
+	// What Claude Code said about the allowance during the turn reaches the game: 30% and 17% used.
+	if want := []payloadLimit{{Mins: 300, Left: 70, Resets: 1794578400}, {Mins: 10080, Left: 83, Resets: 1794830400}}; !slices.Equal(h.payload().Limits, want) {
+		t.Fatalf("the allowance shown in the game: %+v", h.payload().Limits)
+	}
 
 	log := h.logged()
 	for _, want := range []string{"start " + game + " -p ", "--model sonnet", "--effort medium", "--setting-sources  --strict-mcp-config",
@@ -252,6 +257,9 @@ func TestClaudeAnswersAGameplayQuestion(t *testing.T) {
 
 	// The chat continues with the model chosen in its footer, and stays with Claude Code after the player picks Codex.
 	h.s.setProvider("")
+	if p := h.payload(); len(p.Limits) != 0 {
+		t.Fatalf("Claude Code's allowance is shown for Codex: %+v", p.Limits)
+	}
 	if p := h.payload(); p.Agent != "codex" || len(p.Models) != 2 || p.Models[0].Default || p.Models[1].Default {
 		t.Fatalf("Codex is the adviser again; Claude's models stay for its chat, none as the default: %s %+v", p.Agent, p.Models)
 	}
@@ -288,14 +296,18 @@ func TestJournalResearchThroughClaudeCode(t *testing.T) {
 	defer cancel()
 
 	job := &insightJob{kind: &insightKind{search: true, effort: "low"}}
-	if err := execClaude(ctx, h.s.claudePath, job, "journal-probe", schema, out); err != nil {
+	var limits []payloadLimit
+	if err := execClaude(ctx, h.s.claudePath, job, "journal-probe", schema, out, func(l []payloadLimit) { limits = l }); err != nil {
 		t.Fatal(err)
+	}
+	if want := []payloadLimit{{Mins: 300, Left: 58, Resets: 1794578400}, {Mins: 10080, Left: 80, Resets: 1794830400}}; !slices.Equal(limits, want) {
+		t.Fatalf("the allowance a journal job reports: %+v", limits)
 	}
 	if answer, _ := os.ReadFile(out); string(answer) != `{"headline":"Nothing new for you","items":[]}` {
 		t.Fatalf("the structured answer: %s", answer)
 	}
 	log := h.logged()
-	for _, want := range []string{"--model sonnet --effort low", "--setting-sources  --strict-mcp-config", "--tools WebSearch,WebFetch",
+	for _, want := range []string{"--model opus --effort low", "--setting-sources  --strict-mcp-config", "--tools WebSearch,WebFetch",
 		"--permission-mode dontAsk", "--no-session-persistence", `--json-schema {"type":"object"}`} {
 		if !strings.Contains(log, want) {
 			t.Fatalf("Claude Code was not given %q:\n%s", want, log)
@@ -304,12 +316,12 @@ func TestJournalResearchThroughClaudeCode(t *testing.T) {
 
 	// A job that needs no search gets no tools at all.
 	job.kind = &insightKind{effort: "low"}
-	if err := execClaude(ctx, h.s.claudePath, job, "journal-probe", schema, out); err != nil || !strings.Contains(h.logged(), "--tools  --allowedTools  --permission-mode") {
+	if err := execClaude(ctx, h.s.claudePath, job, "journal-probe", schema, out, nil); err != nil || !strings.Contains(h.logged(), "--tools  --allowedTools  --permission-mode") {
 		t.Fatalf("no tools without search: %v\n%s", err, h.logged())
 	}
 
 	os.Remove(out)
-	err := execClaude(ctx, h.s.claudePath, job, "expired-probe", schema, out)
+	err := execClaude(ctx, h.s.claudePath, job, "expired-probe", schema, out, nil)
 	if err == nil || !strings.Contains(err.Error(), "OAuth session expired") {
 		t.Fatalf("an expired sign-in must be reported by its message: %v", err)
 	}

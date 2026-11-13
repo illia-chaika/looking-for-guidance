@@ -24,7 +24,7 @@ end
 Hub.Extend("leveling", {
     tile = { label = "Куда качаться", subtitle = "Зоны и подземелья под твой уровень", action = "Открыть зоны",
         icon = "Interface\\Icons\\INV_Misc_Map_01", order = 15 },
-    open = function() ask() end,
+    open = function() ask({ auto = true }) end,
     build = function(m)
         local c = Hub.NewCard("leveling", L("Куда качаться"), L("Доступ выключен"))
         if not allowed("character") then return c end

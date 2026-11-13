@@ -16,13 +16,17 @@ function Popovers.Settle()
     s.locale = T.LocaleChoice(s.locale)
     s.lineHeight = clamp(s.lineHeight, 1.20, 1.80, 1.45)
     if s.autoAdvice == nil then s.autoAdvice = true end
+    if s.research ~= "auto" then s.research = "click" end
+    local caps = T.Insights
+    s.researchCap = math.floor(clamp(s.researchCap, caps.CAP_MIN, caps.CAP_MAX, caps.CAP_DEFAULT) / 10 + .5) * 10
     if not T.Readers[s.appearance] then s.appearance = "journal" end
 end
 
 local tabsSpec = {
-    { "display", "Оформление" }, { "language", "Язык" }, { "context", "Данные персонажа" }, { "notifications", "Уведомления" },
+    { "display", "Оформление" }, { "language", "Язык" }, { "context", "Данные персонажа" }, { "adviser", "Советник" },
+    { "notifications", "Уведомления" },
 }
-local keys = { "appearance", "scale", "opacity", "fontSize", "lineHeight", "locale", "autoAdvice", "alertChat", "alertSound", "minimap", "context", "extras" }
+local keys = { "appearance", "scale", "opacity", "fontSize", "lineHeight", "locale", "research", "researchCap", "autoAdvice", "alertChat", "alertSound", "minimap", "context", "extras" }
 
 -- Esc dismisses the top sheet. WoW's CloseSpecialWindows normally closes every
 -- registered frame, including the chat below; temporarily substitute our sheet.
@@ -120,6 +124,7 @@ function Popovers.Settings(owner, parent, handlers)
         if draft and draft.locale ~= code then draft.locale = code; changed() end
     end)
     T.BuildDataSettings(pages.context, getDraft, changed, function(d) handlers.preview(d, panel) end)
+    T.BuildAdviserSettings(pages.adviser, getDraft, changed)
     T.BuildNoticeSettings(pages.notifications, getDraft, changed)
     local function resize()
         local w, h = UIParent:GetSize()

@@ -49,7 +49,7 @@ type (
 
 func startCodex(ctx context.Context, path string, onNotify notifyFunc, onRequest requestFunc) (*codexClient, error) {
 	c := &codexClient{ctx: ctx, id: clientCount.Add(1), pending: map[int64]chan rpcMessage{}}
-	err := c.start(path, "", []string{"app-server"}, func(line []byte) {
+	err := c.start(path, "", codexArgs(), func(line []byte) {
 		var m rpcMessage
 		if json.Unmarshal(line, &m) != nil {
 			return

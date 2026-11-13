@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"path/filepath"
@@ -311,10 +312,18 @@ func (s *session) superviseCodex(now time.Time) {
 		if !c.exited() {
 			s.mu.Lock()
 			recheck := s.accountWanted || s.codex == "signed-out" && now.Sub(s.lastAccount) >= 30*time.Second
-			s.accountWanted = false
+			login := s.loginWanted && s.codex == "signed-out"
+			limits := s.limitsWanted && s.codex == "ready" && now.Sub(s.lastLimits) >= 30*time.Second
+			s.accountWanted, s.loginWanted, s.limitsWanted = false, false, s.limitsWanted && !limits
 			s.mu.Unlock()
+			if login {
+				s.startLogin()
+			}
 			if recheck {
 				s.checkAccount(now)
+			}
+			if limits {
+				s.readLimits(now)
 			}
 			return
 		}
@@ -343,7 +352,18 @@ func (s *session) superviseCodex(now time.Time) {
 			logf("Codex isn't installed: not on PATH or in the usual install folders")
 		}
 		s.setCodex("missing", "")
+		// With no adviser ever chosen or used, a missing Codex CLI means there is none at all: someone who had
+		// Claude Code alone would already have been given it (firstAdviser).
+		fresh := s.projectDir != "" && !codexProfileExists()
+		s.mu.Lock()
+		s.noAdviser = fresh && s.provider == ""
+		s.mu.Unlock()
 		return
+	}
+	if s.projectDir != "" {
+		if err := ensureCodexProfile(); err != nil {
+			logf("Couldn't create the adviser's Codex profile: %v", err)
+		}
 	}
 	c, err := startCodex(s.ctx, path, s.notify, s.request)
 	if err == nil {
@@ -379,6 +399,34 @@ func (s *session) retryLater(now time.Time, reset bool) {
 	s.nextStart = now.Add(s.backoff)
 }
 
+// signIn asks for the ChatGPT sign-in page; the menu offers it while Codex is signed out.
+func (s *session) signIn() {
+	s.mu.Lock()
+	s.loginWanted = true
+	s.mu.Unlock()
+}
+
+// startLogin has Codex begin its own browser sign-in for the adviser's profile and opens the page it names.
+// Codex receives the browser's answer itself and reports the account as changed.
+func (s *session) startLogin() {
+	var r struct {
+		AuthURL string `json:"authUrl"`
+	}
+	err := s.client.call("account/login/start", map[string]string{"type": "chatgpt"}, &r)
+	if err == nil && safeWebURL(r.AuthURL) == "" {
+		err = errors.New("Codex named no sign-in page")
+	}
+	if err != nil {
+		logf("Couldn't start the ChatGPT sign-in: %v", err)
+		s.mu.Lock()
+		s.codexErr, s.dirty = "Couldn't start the ChatGPT sign-in: "+oneLine(err.Error()), true
+		s.mu.Unlock()
+		return
+	}
+	logf("Opened the ChatGPT sign-in page")
+	s.openURL(r.AuthURL)
+}
+
 func (s *session) checkAccount(now time.Time) {
 	s.lastAccount = now
 	var r struct {
@@ -397,6 +445,12 @@ func (s *session) checkAccount(now time.Time) {
 		return
 	}
 	logf("Codex is %s", state)
+	s.mu.Lock()
+	s.limitsWanted, s.lastLimits = state == "ready", time.Time{}
+	if state != "ready" {
+		s.codexLimits = nil
+	}
+	s.mu.Unlock()
 	if state == "ready" {
 		s.loadModels()
 		s.loadServerNames("")
@@ -619,7 +673,7 @@ func (s *session) notify(method string, params json.RawMessage) {
 		return
 	}
 	switch method {
-	case "thread/started", "thread/archived", "thread/deleted", "thread/unarchived", "account/updated",
+	case "thread/started", "thread/archived", "thread/deleted", "thread/unarchived", "account/updated", "account/login/completed", "account/rateLimits/updated",
 		"serverRequest/resolved", "error", "thread/status/changed", "thread/name/updated", "thread/closed",
 		"turn/started", "turn/completed", "item/started", "item/completed", "thread/tokenUsage/updated":
 	default:
@@ -630,7 +684,11 @@ func (s *session) notify(method string, params json.RawMessage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.dirty = true
+	// A finished turn spent some of the allowance; Codex's own update is sparse, so the whole snapshot is read again.
+	s.limitsWanted = s.limitsWanted || method == "turn/completed" || method == "account/rateLimits/updated"
 	switch method {
+	case "account/rateLimits/updated":
+		return
 	case "thread/started":
 		if s.projectDir != "" && !s.inProject(&n.Thread) {
 			return
@@ -641,7 +699,7 @@ func (s *session) notify(method string, params json.RawMessage) {
 	case "thread/archived", "thread/deleted", "thread/unarchived":
 		s.listWanted = true
 		return
-	case "account/updated":
+	case "account/updated", "account/login/completed":
 		s.accountWanted = true
 		return
 	case "serverRequest/resolved":

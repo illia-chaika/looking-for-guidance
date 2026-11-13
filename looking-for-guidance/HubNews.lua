@@ -24,7 +24,7 @@ end
 Hub.Extend("news", {
     tile = { label = "Что нового", subtitle = "Исправления игры для тебя", action = "Открыть изменения",
         icon = "Interface\\Icons\\INV_Misc_Note_01", order = 7 },
-    open = function() ask() end,
+    open = function() ask({ auto = true }) end,
     build = function()
         local c = Hub.NewCard("news", L("Что нового"), L("Доступ выключен"))
         if not allowed("character") then return c end
@@ -71,7 +71,8 @@ Hub.Extend("news", {
             end
         else
             c.reason = L("Советник сверит исправления Blizzard с твоим классом, профессиями и заданиями.")
-            c.rows[1] = refresh
+            -- The first look may be answered from the helper's cache; "check now" above always researches again.
+            c.rows[1] = { kind = "actions", actions = { { label = L("Проверить сейчас"), primary = true, click = function() ask() end } } }
         end
         return c
     end,
@@ -80,12 +81,12 @@ Hub.Extend("news", {
     end,
 })
 
--- Once per login, a little after the world loads, and only when the player wants unprompted advice.
+-- Once per login, a little after the world loads, and only when research is set to automatic.
 local asked, entered
 local function greet()
     if asked or not entered or GetTime() - entered < 8 then return end
-    if not T.settings or T.settings.autoAdvice == false or T.Store.codex ~= "ready" then return end
-    asked = ask({ background = true }) == true
+    if not Insights.Automatic() or T.Store.codex ~= "ready" then return end
+    asked = ask({ background = true, auto = true }) == true
 end
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")

@@ -1,8 +1,16 @@
 local _, T = ...
 -- Researched advice for journal cards. The helper prepares it on the Mac and returns it in the payload.
--- A card asks only when the player opens it, presses a button, or once after login.
+-- A card asks when the player presses its button. Only with research set to automatic does it also ask once
+-- after login and when its section is opened.
 local Insights = {}
 T.Insights = Insights
+
+-- The most research jobs a day the helper accepts from the game, whatever the setting says.
+Insights.CAP_MIN, Insights.CAP_MAX, Insights.CAP_DEFAULT = 10, 200, 60
+
+function Insights.Automatic()
+    return T.settings ~= nil and T.settings.research == "auto"
+end
 
 -- About twelve seconds of sending at most: a bag list with tooltip texts is the largest request.
 local BUDGET = 4500
@@ -52,7 +60,7 @@ end
 
 local function send(kind, key, facts, options)
     local packet = { type = "insight", kind = kind, key = key, facts = facts, force = options.force or nil,
-        locale = T.GetUILocale(), gameLocale = GetLocale() }
+        locale = T.GetUILocale(), gameLocale = GetLocale(), cap = T.settings and T.settings.researchCap or nil }
     packet.character, packet.login = T.CharacterIdentity()
     packet.runId = T.Store.runId
     local seq, reason = T.Transport.Send(packet, BUDGET, compact)
@@ -70,9 +78,11 @@ local function send(kind, key, facts, options)
     return true
 end
 
--- options.force asks again past the cache; options.background is for requests nobody is watching.
+-- options.force asks again past the cache; options.background is for requests nobody is watching;
+-- options.auto marks a request the player pressed no button for, sent only when research is automatic.
 function Insights.Request(kind, key, facts, options)
     options = options or {}
+    if options.auto and not Insights.Automatic() then return false end
     if not T.Store.received or T.Store.codex == "offline" or T.Store.codex == "restart" then return false end
     local state = Insights.State(kind, key)
     if not options.force and (state == "ready" or state == "pending") then return true end

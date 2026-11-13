@@ -134,6 +134,8 @@ local function briefRequest()
     return "brief", table.concat({ profile.class, profile.faction or "", profile.race or "", from }, ":"), facts
 end
 
+function Data.CanBrief() return briefRequest() ~= nil end
+
 function Data.Brief()
     local kind, key = briefRequest()
     if not kind then return end

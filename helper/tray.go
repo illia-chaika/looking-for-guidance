@@ -33,6 +33,11 @@ func (a *app) trayReady() {
 	detail.Hide()
 	installAgent := systray.AddMenuItem(tr("Install %s…", "Codex CLI"), "")
 	installAgent.Hide()
+	// Shown beside the first one only when no adviser is installed and none was chosen.
+	installClaude := systray.AddMenuItem(tr("Install %s…", "Claude Code"), "")
+	installClaude.Hide()
+	signIn := systray.AddMenuItem(tr("Sign in to ChatGPT…"), "")
+	signIn.Hide()
 	systray.AddSeparator()
 	adviser := systray.AddMenuItem(tr("Adviser"), "")
 	useCodex := adviser.AddSubMenuItemCheckbox("Codex", "", a.view().provider != "claude")
@@ -57,6 +62,8 @@ func (a *app) trayReady() {
 		visible(retryAccess, v.retryAccess)
 		installAgent.SetTitle(tr("Install %s…", v.installName))
 		visible(installAgent, v.install)
+		visible(installClaude, v.installOther)
+		visible(signIn, v.signIn)
 		check(useCodex, v.provider != "claude")
 		check(useClaude, v.provider == "claude")
 		if v.runWithWoW {
@@ -89,6 +96,10 @@ func (a *app) trayReady() {
 			} else {
 				openURL(codexURL)
 			}
+		case <-installClaude.ClickedCh:
+			openURL(claudeURL)
+		case <-signIn.ClickedCh:
+			a.signIn()
 		case <-useCodex.ClickedCh:
 			a.setProvider("")
 		case <-useClaude.ClickedCh:

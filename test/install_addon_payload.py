@@ -99,7 +99,7 @@ class PayloadTests(unittest.TestCase):
         log.write_text('Installing\n')
         with self.assertRaises(SystemExit):
             installer.archive_failed_update(pending, backups)
-        failure = 'Новое приложение установлено, но файлы WoW не подтверждены. Проверь доступ Companion к тому игры.\n'
+        failure = 'The new app is installed, but the files in WoW are not confirmed. Check the companion\'s access to the game volume.\n'
         log.write_text(failure)
         with mock.patch.object(installer.subprocess, 'check_output', return_value='/sample/tools/install-local-macos.py --apply-pending'), self.assertRaises(SystemExit):
             installer.archive_failed_update(pending, backups)

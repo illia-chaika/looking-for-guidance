@@ -18,7 +18,7 @@ local PROBLEMS = {
     unencodable = { "Не удалось подготовить вопрос. Измени текст и отправь ещё раз." },
     oversized = { "Вопрос с данными слишком велик. Сократи текст или отключи лишние разделы." },
     staleDelivery = { "Срок подтверждения истёк. Проверь историю перед повторной отправкой вопроса." },
-    unready = { "Помощник подключается к Codex. Вопрос останется в поле ввода." },
+    unready = { "Помощник подключается к советнику. Вопрос останется в поле ввода." },
     journalBusy = { "Дождись окончания текущего ответа и открой совет ещё раз." },
     DISABLED = { "Включи группу Looking for Guidance в списке аддонов WoW.", true },
     noQuest = { "Не удалось открыть задание. Проверь журнал клавишей L." },
@@ -305,7 +305,7 @@ function Window.Refresh()
     end
 
     if live and Store.codex ~= "ready" and Store.note ~= "" then
-        notice:Set(Format.Escape(Store.note), false, Store.codex == "error" and "status" or "setup")
+        notice:Set(Format.Escape(T.L(Store.note)), false, Store.codex == "error" and "status" or "setup")
     elseif notice.kind == "setup" or notice.kind == "status" then
         notice:Hide()
     end

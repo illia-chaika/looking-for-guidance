@@ -6,8 +6,8 @@ not against fifteen-year-old guides.
 
 Every player has typed LFG. This is the other kind: looking for guidance.
 
-> **Status: pre-release.** Developed and played on macOS. The Windows build compiles but has not been run yet, and a
-> fresh install still needs a few manual steps (see [Setup](#setup)).
+> **Status: pre-release.** Developed and played on macOS. The Windows build compiles but has not been run yet, and
+> for now you build the app yourself (see [Setup](#setup)).
 
 ## What it does
 
@@ -15,7 +15,8 @@ Every player has typed LFG. This is the other kind: looking for guidance.
 searches current sources before answering. Shift-click items, spells and quests into the message. Each character has
 its own conversations and its own memory of decisions ("I am saving for the mount", "keep the linen").
 
-**Journal.** Eight sections that prepare advice before you ask:
+**Journal.** Eight sections of advice for your character. What the game itself knows is shown at once; what needs
+research is prepared when you press the section's button — or by itself, if you switch research to automatic:
 
 | Section | What you get |
 | --- | --- |
@@ -72,13 +73,17 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 
 ## Cost and privacy
 
-- Advice uses **your own** subscription: a ChatGPT plan through the Codex CLI, or a Claude plan through Claude Code.
-  There is no server of ours and no account to create.
+- Advice uses **your own** subscription: a Claude plan through Claude Code, or a ChatGPT plan through the Codex CLI.
+  One of them is enough. There is no server of ours and no account to create.
 - What is sent to the model: your question, and the sections of the character snapshot the agent requests. You
   choose the allowed sections in *Settings → Character data*.
-- Journal research spends the same allowance. Two jobs run after login (hotfix digest and class advice), the rest
-  when you open a section or press its button, at most 60 a day. Turning off *Advice on the overview* stops the jobs
-  after login. A switch for "only when I press the button" as the default is on the roadmap.
+- Journal research spends the same allowance, so by default it runs **only when you press a button** in a section.
+  *Settings → Advisor* has the switch to *Automatic*: then the hotfix digest and class advice are prepared after
+  login and the other sections when you open them. The same page sets how many research jobs may run in a day
+  (60 unless you change it, 200 at most). Answers are cached on disk, so asking again for the same thing is free
+  until the answer goes stale.
+- The chat footer's tooltip shows which adviser answers and how much of its allowance is left, when the provider
+  reports that: Codex through its account limits, Claude Code after each turn.
 - Conversations, snapshots, memory and cached research stay on your disk.
 
 ## Setup
@@ -86,41 +91,28 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 For now you build it yourself.
 
 **You need:** macOS, the game client with a `_forever_` folder, Xcode command line tools, Go (the toolchain named
-in `go.mod`), Python 3, and one of the two agents signed in: the Codex CLI with a ChatGPT plan, or Claude Code with
-a Claude plan. Lua is needed only for the tests.
+in `go.mod`), Python 3, and **one** of the two agents: Claude Code with a Claude plan, or the Codex CLI with a
+ChatGPT plan. Lua is needed only for the tests.
 
 ```sh
 ./tools/build-macos.sh                     # builds and ad-hoc signs dist/Looking for Guidance.app
 python3 tools/install-local-macos.py       # installs the app and the add-on; close the game first
 ```
 
-Start the app, pick the game folder from its menu bar icon, and let it install the add-on.
+Start the app, pick the game folder from its menu bar icon, and let it install the add-on. In the game, type `/ask`.
 
-**With Claude Code** there is nothing else to set up: sign in once with `claude auth login`, then choose
-*Adviser → Claude Code* in the companion's menu. The companion starts Claude Code without your own Claude settings,
-memory files, skills or MCP servers, so the adviser behaves the same on every machine.
+The adviser is chosen in the menu under *Adviser*, and everything goes to the one you chose. If you have only
+Claude Code installed, the companion uses it without asking; nothing of Codex is started or created.
 
-**With Codex**, give the agent its isolated profile — this step is manual until the app does it itself. Create
-`~/Library/Application Support/Looking for Guidance Codex/config.toml`:
+**With Claude Code** there is nothing else to set up: sign in once with `claude auth login`. The companion starts
+Claude Code without your own Claude settings, memory files, skills or MCP servers, so the adviser behaves the same
+on every machine.
 
-```toml
-model = "gpt-6.1-sol"
-model_reasoning_effort = "medium"
-web_search = "live"
-sandbox_mode = "read-only"
-
-[features]
-shell_tool = false
-unified_exec = false
-
-[mcp_servers.wow_game]
-command = "/Users/YOU/Applications/Looking for Guidance.app/Contents/MacOS/LookingForGuidance"
-args = ["--game-mcp"]
-```
-
-and sign in once with `CODEX_HOME="$HOME/Library/Application Support/Looking for Guidance Codex" codex login`.
-
-In the game, type `/ask`.
+**With Codex**, the companion keeps the adviser apart from your own Codex setup in a profile it creates itself on
+first use (`~/Library/Application Support/Looking for Guidance Codex/config.toml`: read-only sandbox, no shell, live
+web search, the game data server). That profile has its own sign-in: when the menu says *Codex is not signed in to
+ChatGPT*, choose *Sign in to ChatGPT…* and finish in the browser. An existing profile is never rewritten, so you can
+change its default model there.
 
 ### Settings
 
@@ -130,7 +122,7 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 | --- | --- |
 | `wowDir` | The game folder, ending in `_forever_` |
 | `runWithWoW` | Start and quit the companion together with the game |
-| `provider` | `"claude"` for Claude Code; absent for Codex |
+| `provider` | `"claude"` for Claude Code; absent for Codex. Set by the *Adviser* menu, and by the first start when only Claude Code is installed |
 | `codexPath` | Full path of the Codex CLI when it is not on `PATH` |
 | `language` | Language of the companion's menu, such as `"ru"` or `"de"`; by default it follows the system |
 | `gameDir` | The agent's working folder; chats are tied to it, so it only matters when moving an existing setup |
@@ -171,9 +163,7 @@ referenced by path.
 
 ## Roadmap
 
-- Remaining allowance shown in the game (both agents report it)
-- Journal research only on request by default
-- Setup without manual steps, signed and notarized macOS build, Windows build
+- Signed and notarized macOS build, Windows build, ready-made releases
 
 ## Licence and credits
 

@@ -20,14 +20,19 @@ const (
 	claudeSignInNote = "Sign in to the Claude Code CLI on this computer."
 )
 
+// The add-on translates these notes (SmartStrings.lua; test/locale_complete.lua reads them from here). Each names
+// only the adviser the player chose.
 var codexNotes = map[string]string{
 	"missing":    "Не удалось найти Codex CLI. Проверь путь в настройках Looking for Guidance.",
-	"signed-out": "Войди в ChatGPT через Codex CLI в игровом профиле.",
+	"signed-out": "Войди в ChatGPT: выбери «Войти в ChatGPT…» в меню Looking for Guidance.",
 	"error":      "Подключаюсь к Codex…",
 }
 
+// Nobody chose an adviser and neither is installed.
+const noAdviserNote = "Не найден ни один советник. Установи Claude Code или Codex CLI: ссылки есть в меню Looking for Guidance."
+
 var claudeNotes = map[string]string{
-	"missing":    "Не удалось найти Claude Code. Установи его или выбери Codex в меню Looking for Guidance.",
+	"missing":    "Не удалось найти Claude Code. Установи его или выбери другого советника в меню Looking for Guidance.",
 	"signed-out": "Войди в Claude Code: выполни claude auth login в терминале.",
 	"error":      "Подключаюсь к Claude Code…",
 }
@@ -66,6 +71,14 @@ type session struct {
 	cancelOnDenial  context.CancelFunc
 	listWanted      bool
 	accountWanted   bool
+	loginWanted     bool
+	limitsWanted    bool
+	limitsRefused   bool
+	lastLimits      time.Time
+	codexLimits     []payloadLimit
+	claudeLimits    []payloadLimit
+	noAdviser       bool
+	openURL         func(string)
 	mcpWanted       map[string]bool
 	serverNames     map[string]string
 	claude          map[string]*claudeThread
@@ -104,6 +117,7 @@ type sessionView struct {
 	claude          bool
 	claudeInstalled bool
 	claudeChecked   bool
+	noAdviser       bool
 	hello           time.Time
 	threads         int
 	problem         string
@@ -112,7 +126,7 @@ type sessionView struct {
 func newSession(wowDir string, origins map[string]string, onTick func()) *session {
 	return &session{
 		runID: fmt.Sprint(time.Now().UnixNano()),
-		ctx:   context.Background(), wowDir: wowDir, origins: origins, onTick: onTick, findAgent: findInstalled, codex: "error",
+		ctx:   context.Background(), wowDir: wowDir, origins: origins, onTick: onTick, findAgent: findInstalled, openURL: openURL, codex: "error",
 		threads: map[string]*threadState{}, claude: map[string]*claudeThread{},
 		acks: map[string][]int64{}, dirty: true,
 		mcpWanted: map[string]bool{}, serverNames: map[string]string{},
@@ -122,7 +136,7 @@ func newSession(wowDir string, origins map[string]string, onTick func()) *sessio
 func (s *session) view() sessionView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return sessionView{provider: s.provider, codex: s.codex, claude: s.claudePath != "", claudeInstalled: s.claudeInstalled, claudeChecked: s.claudeChecked, hello: s.hello, threads: len(s.order) + len(s.claude), problem: firstOf(s.watchErr, s.writeErr, s.codexErr)}
+	return sessionView{provider: s.provider, codex: s.codex, claude: s.claudePath != "", claudeInstalled: s.claudeInstalled, claudeChecked: s.claudeChecked, noAdviser: s.noAdviser && s.codex == "missing", hello: s.hello, threads: len(s.order) + len(s.claude), problem: firstOf(s.watchErr, s.writeErr, s.codexErr)}
 }
 
 func (s *session) accessDenied() bool {
@@ -164,7 +178,8 @@ func (s *session) run(ctx context.Context) {
 	if s.projectDir != "" {
 		s.insights = newInsightEngine(filepath.Join(configDir(), "insights"), func() {
 			s.mu.Lock()
-			s.dirty = true
+			// A finished research job spent some of the allowance.
+			s.dirty, s.limitsWanted = true, true
 			s.mu.Unlock()
 		}, func() (string, string) {
 			s.mu.Lock()
@@ -176,6 +191,7 @@ func (s *session) run(ctx context.Context) {
 			return "codex", s.findAgent("codex")
 		})
 		s.insights.notes = bagNotes
+		s.insights.limits = s.setClaudeLimits
 		s.loadThreadOwners()
 		s.pulseDetailBridge(snapshotDir(), time.Now())
 		defer closeDetailBridge(snapshotDir(), s.runID)
@@ -218,7 +234,9 @@ func (s *session) run(ctx context.Context) {
 		case <-tick.C:
 		}
 		now := time.Now()
-		s.superviseCodex(now)
+		if s.wantsCodex() {
+			s.superviseCodex(now)
+		}
 		if s.wantsClaude() {
 			s.superviseClaude(now)
 		}
@@ -305,7 +323,7 @@ func (s *session) receive(p packet) {
 		// Research runs beside the conversations and has its own cache, so it does not wait in the Codex queue.
 		if s.insights != nil {
 			s.insights.request(insightRequest{Kind: p.Kind, Key: p.Key, Locale: p.Locale, GameLocale: p.GameLocale,
-				Character: s.activeCharacter, Force: p.Force, Facts: p.Facts})
+				Character: s.activeCharacter, Force: p.Force, Cap: p.Cap, Facts: p.Facts})
 		}
 		return
 	}
@@ -434,6 +452,14 @@ func (s *session) handle(p packet) {
 	}
 }
 
+// wantsCodex says whether Codex is worth starting: it is the chosen adviser, or it was used here before and older
+// chats may belong to it. Someone who plays with Claude Code alone never has Codex started or a profile made for it.
+func (s *session) wantsCodex() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.projectDir == "" || s.provider != "claude" || s.client != nil || codexProfileExists()
+}
+
 // wantsClaude says whether Claude Code is worth watching: it is the chosen adviser, or older chats belong to it.
 func (s *session) wantsClaude() bool {
 	s.mu.Lock()
@@ -534,7 +560,12 @@ func (s *session) payload() payload {
 	if s.projectDir != "" {
 		p.Agent = firstOf(s.provider, "codex")
 	}
+	if s.codex == "missing" && s.noAdviser {
+		p.Note = noAdviserNote
+	}
+	p.Limits = s.codexLimits
 	if byClaude {
+		p.Limits = s.claudeLimits
 		// The add-on reads this field as "is the adviser ready"; with Claude Code chosen it speaks for Claude Code.
 		p.Codex = s.claudeState()
 		p.Note = claudeNotes[p.Codex]

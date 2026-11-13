@@ -68,7 +68,8 @@ func TestMain(m *testing.M) {
 
 // fakeCodex acts as a Codex app server on the same pipes, with replies in Codex's shape. It logs each line it gets to
 // CODEX_LOG, and logs "eof" when its input closes and it exits. While the file CODEX_HOLD exists, thread/list and the
-// notifications of a started turn wait. With "auth status", it answers as a signed-in Claude Code.
+// notifications of a started turn wait. With "auth status", it answers as a signed-in Claude Code. While the file
+// CODEX_SIGNED_OUT exists it has no account; account/login/start names a sign-in page and completes the sign-in.
 func fakeCodex() {
 	log, err := os.OpenFile(os.Getenv("CODEX_LOG"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -105,6 +106,20 @@ func fakeCodex() {
 			result = map[string]string{"userAgent": "fake-codex/0.147.0"}
 		case "account/read":
 			result = map[string]any{"account": map[string]string{"type": "apiKey"}, "requiresOpenaiAuth": true}
+			if path := os.Getenv("CODEX_SIGNED_OUT"); path != "" {
+				if _, err := os.Stat(path); err == nil {
+					result = map[string]any{"account": nil, "requiresOpenaiAuth": true}
+				}
+			}
+		case "account/rateLimits/read":
+			// The shape of a real answer (Codex 0.166.0): one weekly window, reported as the primary one. Made-up numbers.
+			result = map[string]any{"rateLimits": map[string]any{"limitId": "codex", "secondary": nil,
+				"primary": map[string]any{"usedPercent": 35, "windowDurationMins": 10080, "resetsAt": 1795000000}}}
+		case "account/login/start":
+			out.Encode(map[string]any{"id": m.ID, "result": map[string]string{"type": m.Params["type"].(string), "loginId": "login-1", "authUrl": "https://auth.openai.com/oauth/authorize?state=test"}})
+			os.Remove(os.Getenv("CODEX_SIGNED_OUT"))
+			send("account/login/completed", map[string]any{"loginId": "login-1", "success": true})
+			continue
 		case "model/list":
 			efforts := []map[string]string{{"reasoningEffort": "low"}, {"reasoningEffort": "medium"}, {"reasoningEffort": "high"}}
 			result = map[string]any{"data": []map[string]any{{"id": "gpt-5.5", "displayName": "GPT-5.5", "isDefault": true, "defaultReasoningEffort": "medium", "supportedReasoningEfforts": efforts}}, "nextCursor": nil}

@@ -143,6 +143,11 @@ Hub.Extend("checkup", {
         elseif state == "failed" then
             rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("Советы по классу сейчас недоступны.") .. " " .. (found.note or "") }
             rows[#rows + 1] = { kind = "actions", actions = { { label = L("Проверить заново"), click = function() Data.AskBrief({ force = true }) end } } }
+        elseif Data.CanBrief() then
+            rows[#rows + 1] = { kind = "section", text = L("Советы для твоего класса") }
+            rows[#rows + 1] = { kind = "text", style = "t-ui", ink = "detail",
+                text = L("Советник соберёт для твоего класса и уровня приоритет характеристик, классовые задания и ранги, которые стоит купить или пропустить.") }
+            rows[#rows + 1] = { kind = "actions", actions = { { label = L("Собрать советы по классу"), primary = true, click = function() Data.AskBrief() end } } }
         end
         if cache.points > 0 or cache.trainable > 0 then
             -- A new level brings points and spells: worth one quiet badge.
@@ -152,19 +157,19 @@ Hub.Extend("checkup", {
         end
         return c
     end,
-    open = function() Data.AskBrief() end,
+    open = function() Data.AskBrief({ auto = true }) end,
     discuss = function(_, card)
         return L("Осмотри моего персонажа: что стоит исправить в первую очередь и почему?")
     end,
 })
 
--- The brief changes rarely, so it is prepared once after login for the cards that use it.
+-- The brief changes rarely, so with automatic research it is prepared once after login for the cards that use it.
 local greeted
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function()
     C_Timer.After(14, function()
-        if greeted or not T.settings or T.settings.autoAdvice == false or T.Store.codex ~= "ready" then return end
-        greeted = Data.AskBrief({ background = true }) == true
+        if greeted or not T.Insights.Automatic() or T.Store.codex ~= "ready" then return end
+        greeted = Data.AskBrief({ background = true, auto = true }) == true
     end)
 end)

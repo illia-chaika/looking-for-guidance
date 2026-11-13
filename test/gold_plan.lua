@@ -36,6 +36,17 @@ local function sent()
     for _, packet in ipairs(wow.sent) do if packet.type == "insight" and packet.kind == "brief" then list[#list + 1] = packet end end
     return list
 end
+local function hasButton(c, label)
+    for _, r in ipairs(c.rows or {}) do
+        if r.kind == "actions" and r.actions[1].label == label then return r.actions[1] end
+    end
+end
+wow.Event("PLAYER_ENTERING_WORLD", true)
+wow.Run(20)
+assert(#sent() == 0, "with research on click the login prepares no brief")
+local offer = hasButton(hub.Cards(hub.Model({})).checkup, "Gather class advice")
+assert(offer and offer.primary, "the check-up offers to gather the class advice instead")
+T.settings.research = "auto"
 wow.Event("PLAYER_ENTERING_WORLD", true)
 wow.Run(20)
 local asked = sent()

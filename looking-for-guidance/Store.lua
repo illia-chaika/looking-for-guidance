@@ -343,6 +343,7 @@ function Store.Apply(data)
     Store.starting = data.starting == true
     Store.models = data.models or {}
     Store.agent = data.agent
+    Store.limits = data.limits or {}
     Store.projects = data.projects or {}
 
     local before = {}

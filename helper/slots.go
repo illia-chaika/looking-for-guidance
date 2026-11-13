@@ -25,6 +25,7 @@ const (
 type payload struct {
 	Character     string              `json:"character,omitempty"`
 	Insights      []insight           `json:"insights,omitempty"`
+	Limits        []payloadLimit      `json:"limits,omitempty"`
 	Memory        *memoryView         `json:"memory,omitempty"`
 	V             int                 `json:"v"`
 	Rev           int64               `json:"rev,omitempty"`

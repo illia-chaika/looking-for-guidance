@@ -56,9 +56,10 @@ func TestTrayStatus(t *testing.T) {
 		{"setup failed", func(a *app) { a.wowDir, a.problem = "/wow", "Setup failed: disk full" }, "Ожидаю запуска WoW Forever", "Setup failed: disk full", false},
 		{"restart", func(a *app) { a.wowDir, a.running, a.restart = "/wow", true, true }, "Перезапусти WoW, чтобы загрузить аддон", "", true},
 		{"no CLI", func(a *app) { a.wowDir, a.running, a.sess, s.codex = "/wow", true, s, "missing" }, "Не удалось найти Codex CLI", "", true},
+		{"no adviser", func(a *app) { a.wowDir, a.running, a.sess, s.codex, s.noAdviser = "/wow", true, s, "missing", true }, "Не найден ни один советник", "", true},
 		{"signed out", func(a *app) {
-			a.wowDir, a.running, a.sess, s.codex, s.claudeInstalled = "/wow", true, s, "signed-out", false
-		}, "Войди в ChatGPT через Codex CLI", "", true},
+			a.wowDir, a.running, a.sess, s.codex, s.claudeInstalled, s.noAdviser = "/wow", true, s, "signed-out", false, false
+		}, "Codex не вошёл в ChatGPT", "", true},
 		{"no addon", func(a *app) { a.wowDir, a.running, a.sess, s.codex = "/wow", true, s, "ready" }, "Жду входа персонажа в игру", "", false},
 		{"connected", func(a *app) {
 			a.wowDir, a.running, a.sess = "/wow", true, s
@@ -73,8 +74,12 @@ func TestTrayStatus(t *testing.T) {
 		a := &app{}
 		c.setup(a)
 		v := a.view()
-		if v.status != c.status || v.detail != c.detail || v.alert != c.alert || v.choose != (c.name == "no folder") || v.install != (c.name == "no CLI") {
+		if v.status != c.status || v.detail != c.detail || v.alert != c.alert || v.choose != (c.name == "no folder") || v.install != (c.name == "no CLI" || c.name == "no adviser") {
 			t.Errorf("%s: got %q / %q / alert %v / choose %v / install %v", c.name, v.status, v.detail, v.alert, v.choose, v.install)
+		}
+		// Only a setup with no adviser at all is offered both; only a signed-out Codex is offered the sign-in.
+		if v.installOther != (c.name == "no adviser") || v.signIn != (c.name == "signed out") {
+			t.Errorf("%s: second install item %v, sign-in item %v", c.name, v.installOther, v.signIn)
 		}
 	}
 }

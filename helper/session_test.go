@@ -188,6 +188,10 @@ func TestSessionBridgesCodexEndToEnd(t *testing.T) {
 	waitFor("Codex ready with its threads and the old thread's history", func(p payload) bool {
 		return p.Codex == "ready" && len(p.Models) == 1 && len(p.Threads) == 1 && p.Threads[0].Cwd == work && said(p.Threads[0], "Mana ticks every two seconds.")
 	})
+	limits := waitFor("the account's allowance", func(p payload) bool { return len(p.Limits) > 0 }).Limits
+	if want := []payloadLimit{{Mins: 10080, Left: 65, Resets: 1795000000}}; !slices.Equal(limits, want) {
+		t.Fatalf("the allowance shown in the game: %+v", limits)
+	}
 	if err := os.WriteFile(hold, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}

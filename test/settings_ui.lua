@@ -52,8 +52,21 @@ assert(T.settings.appearance == "journal" and T.settings.context.gear and T.sett
 gear():Fire("OnClick")
 named("Трекер"):Fire("OnClick")
 T.settings.choice.model = "changed-elsewhere"
+-- Journal research: on click by default, automatic or with another daily cap only after Save.
+frame(function(f) return f.label and f.label:GetText() == "Советник" and f:GetParent() == named("Уведомления"):GetParent() end):Fire("OnClick")
+local function shown(text)
+    for _, f in ipairs(wow.texts) do if f:IsVisible() and f:GetText() == text then return true end end
+end
+assert(shown("Исследования журнала") and shown("Советник готовит раздел, только когда ты нажмёшь в нём кнопку. Каждое исследование расходует лимит твоей подписки."))
+named("Автоматически"):Fire("OnClick")
+assert(not shown("Советник готовит раздел, только когда ты нажмёшь в нём кнопку. Каждое исследование расходует лимит твоей подписки."), "the hint follows the chosen mode")
+local cap = frame(function(f) return f.slider and f.readout end)
+assert(cap.readout:GetText() == "60")
+cap.slider:Fire("OnValueChanged", 30)
+assert(cap.readout:GetText() == "30" and T.settings.research == "click" and T.settings.researchCap == 60, "nothing changes before Save")
 named("Сохранить"):Fire("OnClick")
 assert(T.settings.appearance == "tracker" and T.settings.choice.model == "changed-elsewhere")
+assert(T.settings.research == "auto" and T.settings.researchCap == 30)
 assert(not veil:IsVisible())
 gear():Fire("OnClick")
 local function closeButton(owner)
@@ -71,4 +84,4 @@ named("Посмотреть данные"):Fire("OnClick")
 looking_for_guidance_window:Hide()
 assert(not veil:IsVisible() and not looking_for_guidance_data_preview:IsShown())
 assert(tContains(UISpecialFrames, "looking_for_guidance_window"))
-print("Settings: modal mouse layers, staged preview, resize, Escape, close button, outside click and owner cleanup OK")
+print("Settings: modal mouse layers, staged preview, research mode and daily cap, resize, Escape, close button, outside click and owner cleanup OK")
