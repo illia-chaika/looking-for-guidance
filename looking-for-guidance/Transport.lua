@@ -1,0 +1,199 @@
+local _, T = ...
+
+-- An interface reload or a second client can start within the same second.
+local Transport = { session = string.format("s%d-%06x", time(), math.random(0, 0xffffff)) }
+T.Transport = Transport
+
+local VERSION = 4
+local SLOT_LIMIT = 1024
+local BITS = 128
+local FRAME_DATA = BITS / 8 - 1
+local FRAME_SECONDS = 0.04
+
+local bits = {}
+for index = 1, BITS do
+    bits[index] = string.format("looking-for-guidance-bit-%03d", index)
+end
+
+local slot, seq, counter = 1, 0, time() % 128
+local installed
+
+local function slotName(index)
+    return string.format("looking-for-guidance-slot-%03d", index)
+end
+
+-- The helper decides how many one-shot payload add-ons exist. Count them once:
+-- the game lists add-on folders only when the client starts.
+local function slots()
+    if not installed then
+        installed = 0
+        while installed < SLOT_LIMIT and C_AddOns.DoesAddOnExist(slotName(installed + 1)) do
+            installed = installed + 1
+        end
+    end
+    return installed
+end
+local queue, shown = {}, {}
+local stepping, shownAt = false, 0
+-- Real time where the client has it: the frame's own time stands still while the game is busy.
+local clock = GetTimePreciseSec or GetTime
+
+local function show(frame)
+    for byte = 1, #frame do
+        local value = frame:byte(byte)
+        for bit = 0, 7 do
+            local index = (byte - 1) * 8 + bit + 1
+            local on = math.floor(value / 2 ^ (7 - bit)) % 2 == 1
+            if shown[index] ~= on then
+                if on then
+                    C_AddOns.EnableAddOn(bits[index])
+                else
+                    C_AddOns.DisableAddOn(bits[index])
+                end
+                shown[index] = on
+            end
+        end
+    end
+    C_AddOns.SaveAddOns()
+end
+
+-- Each frame waits a full interval after the previous one. A repeating ticker fires early after a late tick to keep
+-- its schedule, and two frames 10 ms apart are overwritten on disk before the helper has read the first:
+-- one missed frame loses the whole packet.
+local function step()
+    local packet = queue[1]
+    if not packet then
+        stepping = false
+        return
+    end
+    local wait = shownAt + FRAME_SECONDS - clock()
+    if wait > 0.005 then
+        C_Timer.After(wait, step)
+        return
+    end
+    local head = (packet.next == 1 and 128 or 0) + counter
+    counter = (counter + 1) % 128
+    show(string.char(head) .. packet.frames[packet.next])
+    shownAt = clock()
+    C_Timer.After(FRAME_SECONDS, step)
+    packet.next = packet.next + 1
+    if packet.next > #packet.frames then
+        table.remove(queue, 1)
+        T.Fire("PacketSent", packet.seq)
+    end
+end
+
+local function frames(body)
+    local stream = string.char(math.floor(#body / 256), #body % 256) .. body
+    local list = {}
+    for start = 1, #stream, FRAME_DATA do
+        local chunk = stream:sub(start, start + FRAME_DATA - 1)
+        table.insert(list, chunk .. string.rep("\0", FRAME_DATA - #chunk))
+    end
+    return list
+end
+
+local function encode(packet)
+    return C_EncodingUtil.CompressString(C_EncodingUtil.SerializeJSON(packet), Enum.CompressionMethod.Zlib)
+end
+
+local function enqueue(number, body)
+    table.insert(queue, { seq = number, next = 1, frames = frames(body) })
+    if not stepping then
+        stepping = true
+        C_Timer.After(FRAME_SECONDS, step)
+    end
+end
+
+-- The latest packets as sent, so one that the helper never confirmed can go out again unchanged.
+local KEPT = 24
+local sent = {}
+
+function Transport.Send(packet, byteBudget, compact)
+    if not C_AddOns.DoesAddOnExist(bits[BITS]) then
+        return nil, "uninstalled"
+    end
+    seq = seq + 1
+    packet.seq, packet.session, packet.at = seq, Transport.session, time()
+    local ok, body = pcall(encode, packet)
+    if ok and type(body) == "string" and byteBudget and #body > byteBudget and compact then
+        for pass = 1, 3 do
+            compact(packet, pass)
+            ok, body = pcall(encode, packet)
+            if not ok or type(body) ~= "string" or #body <= byteBudget then break end
+        end
+    end
+    if not ok or type(body) ~= "string" or #body == 0 then
+        return nil, "unencodable"
+    elseif #body > (byteBudget or 65535) then
+        return nil, "oversized"
+    end
+    enqueue(seq, body)
+    sent[seq], sent[seq - KEPT] = body, nil
+    return seq, nil, body
+end
+
+-- Frames can be lost on the way: the game rewrites AddOns.txt every 40 ms and the helper may miss one.
+-- The helper recognises a repeated session and sequence, so sending the same envelope twice is safe.
+function Transport.Retry(number)
+    if not sent[number] or Transport.Sending(number) or not C_AddOns.DoesAddOnExist(bits[BITS]) then
+        return false
+    end
+    enqueue(number, sent[number])
+    return true
+end
+
+-- The helper deduplicates by session and sequence. Replay the exact original
+-- envelope (including capture time and state) when the acknowledgement was lost.
+function Transport.Resend(number, body)
+    if not C_AddOns.DoesAddOnExist(bits[BITS]) then
+        return nil, "uninstalled"
+    end
+    if not Transport.Sending(number) then
+        enqueue(number, body)
+    end
+    return number
+end
+
+function Transport.Sending(packetSeq)
+    for _, packet in ipairs(queue) do
+        if packet.seq == packetSeq then
+            return true
+        end
+    end
+    return false
+end
+
+function Transport.SlotsLeft()
+    return slots() - slot + 1
+end
+
+function Transport.Slots()
+    return slots()
+end
+
+function Transport.Load()
+    if slots() == 0 then
+        return false, "uninstalled"
+    elseif slot > slots() then
+        return false, "exhausted"
+    end
+    local name = slotName(slot)
+    C_AddOns.EnableAddOn(name)
+    local loaded, reason = C_AddOns.LoadAddOn(name)
+    if not loaded then
+        return false, reason
+    end
+    slot = slot + 1
+    return true
+end
+
+function looking_for_guidance_receive(json)
+    local ok, data = pcall(C_EncodingUtil.DeserializeJSON, json)
+    if ok and type(data) == "table" and data.v == VERSION then
+        T.Store.Apply(data)
+        T.GameDetails.Receive(data.detailRequest)
+    else
+        T.Fire("Problem", "unreadable")
+    end
+end

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="sea" x2=".7" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#254856"/>
+      <stop offset="1" stop-color="#0d252e"/>
+    </linearGradient>
+  </defs>
+  <rect class="plate" x="4" y="4" width="92" height="92" rx="20" fill="url(#sea)"/>
+  <g fill="none" stroke="#b8ced0" stroke-width="3.5" class="dial">
+    <circle cx="50" cy="50" r="33"/>
+    <path d="M50 17v7 M83 50h-7 M50 83v-7 M17 50h7"/>
+  </g>
+  <g class="needle" transform="rotate(35 50 50)">
+    <path class="north" d="M50 21 60 50 50 54 40 50Z" fill="#f6c568"/>
+    <path class="south" d="M40 50 50 54 60 50 50 79Z" fill="#d8e6e5"/>
+    <circle class="pivot" cx="50" cy="50" r="2.6" fill="#17343e"/>
+  </g>
+  <path class="warning" d="M50 33v20 M50 64v1" fill="none" stroke="#f6c568" stroke-width="7" stroke-linecap="round" display="none"/>
+</svg>

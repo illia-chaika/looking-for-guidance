@@ -1,0 +1,10 @@
+# Build outputs
+/dist/
+/helper/helper
+/helper/resource_windows_amd64.syso
+/third-party-notices.txt
+__pycache__/
+.DS_Store
+
+# Local state of a development machine: the game profile, chat history, logs and installation backups.
+/local/

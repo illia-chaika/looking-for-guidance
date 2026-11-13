@@ -1,0 +1,11 @@
+Twemoji 17.0.3 graphics
+Artwork by Twitter and the Twemoji contributors, including Jason Sofonia
+and Justine De Caires.
+Source: https://github.com/jdecked/twemoji/tree/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b
+Contributors: https://github.com/jdecked/twemoji/graphs/contributors
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+The full license is in CC-BY-4.0-Twemoji.txt.
+
+Looking for Guidance resizes the original 72x72 PNG graphics to 30x30 pixels,
+adds a transparent gutter and arranges them into 32-bit TGA texture atlases.

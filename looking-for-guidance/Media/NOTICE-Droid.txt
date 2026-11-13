@@ -1,0 +1,4 @@
+Droid Sans Fallback
+Digitized data copyright Google Corporation © 2006
+Licensed under the Apache License, Version 2.0. See Apache-2.0-Droid.txt.
+This unmodified font is included for Chinese and Korean text.

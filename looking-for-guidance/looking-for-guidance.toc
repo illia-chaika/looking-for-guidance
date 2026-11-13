@@ -1,0 +1,66 @@
+## Interface: 16001
+## Title: Looking for Guidance
+## Notes: In-game advisor for quests, equipment and talents.
+## Notes-ruRU: Игровой помощник по заданиям, экипировке и талантам.
+## Notes-deDE: Ratgeber für Quests, Ausrüstung und Talente im Spiel.
+## Notes-frFR: Conseiller en jeu pour les quêtes, l’équipement et les talents.
+## Notes-esES: Asistente de misiones, equipo y talentos dentro del juego.
+## Notes-esMX: Asistente de misiones, equipo y talentos dentro del juego.
+## Notes-ptBR: Assistente de missões, equipamentos e talentos dentro do jogo.
+## Notes-koKR: 퀘스트, 장비, 특성을 안내하는 게임 내 도우미입니다.
+## Notes-zhCN: 游戏内的任务、装备和天赋助手。
+## Notes-zhTW: 遊戲內的任務、裝備與天賦助手。
+## Author: thott.bot contributors, Looking for Guidance contributors
+## Version: 0.10.0-local
+## Category: Looking for Guidance
+## DefaultState: enabled
+## SavedVariables: looking_for_guidance_settings
+## IconTexture: Interface\AddOns\looking-for-guidance\Media\Emblem
+## AddonCompartmentFunc: looking_for_guidance_on_addon_compartment_click
+## AddonCompartmentFuncOnEnter: looking_for_guidance_on_addon_compartment_enter
+## AddonCompartmentFuncOnLeave: looking_for_guidance_on_addon_compartment_leave
+
+Core.lua
+CharacterIdentity.lua
+LocaleData.lua
+EmojiData.lua
+Emoji.lua
+Locale.lua
+Tokens.lua
+Format.lua
+Kit.lua
+JournalSkin.lua
+Store.lua
+Transport.lua
+Sync.lua
+GameDetails.lua
+Recipes.lua
+Context.lua
+Actions.lua
+GameLinks.lua
+ModelPicker.lua
+Composer.lua
+Transcript.lua
+List.lua
+Glance.lua
+AppearanceSettings.lua
+SettingsPages.lua
+LanguageSettings.lua
+Popovers.lua
+HubStrings.lua
+AdvisorStrings.lua
+SmartStrings.lua
+HubPage.lua
+HubMemory.lua
+HubOverview.lua
+HubData.lua
+Insights.lua
+HubCheckup.lua
+HubNews.lua
+HubQuestCheck.lua
+HubGold.lua
+HubDungeon.lua
+HubBags.lua
+HubLeveling.lua
+Window.lua
+Alerts.lua

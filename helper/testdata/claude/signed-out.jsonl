@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","cwd":"WORK","session_id":"5f0c6a8e-3d0b-4c0e-9b53-2f6d1f0a7c11","model":"claude-sonnet-5-5","permissionMode":"dontAsk"}
+{"type":"result","subtype":"success","is_error":true,"result":"Failed to authenticate: OAuth session expired and could not be refreshed","session_id":"5f0c6a8e-3d0b-4c0e-9b53-2f6d1f0a7c11"}
