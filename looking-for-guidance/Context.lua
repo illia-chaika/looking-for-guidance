@@ -301,19 +301,30 @@ local function talents(cards)
 end
 
 local function skills(cards)
-    local labels = {}
+    local labels, named, lines, whole = {}, {}, {}, true
     for index = 1, optional(C_SkillInfo and C_SkillInfo.GetNumSkillLines) or 0 do
         local skill = optional(C_SkillInfo.GetSkillLineInfo, index)
         if skill and not skill.isHeader then
-            cards[#cards + 1] = { kind = "skill", id = skill.skillID, name = skill.name, rank = skill.rank,
-                maxRank = skill.maxRank, modifier = skill.modifier, tempPoints = skill.tempPoints,
-                description = skill.description ~= "" and skill.description or nil, minLevel = skill.minLevel }
-            labels[#labels + 1] = string.format("%s %d/%d", skill.name, skill.rank, skill.maxRank)
+            lines[skill.skillID] = skill
+            -- The Forever client lists a profession under two skill IDs with one name and one rank. One is enough,
+            -- and the lower ID is the one the profession's own book goes by.
+            local twin = named[skill.name]
+            if twin and twin.rank == skill.rank and twin.maxRank == skill.maxRank then
+                twin.id = math.min(twin.id, skill.skillID)
+            else
+                local card = { kind = "skill", id = skill.skillID, name = skill.name, rank = skill.rank,
+                    maxRank = skill.maxRank, modifier = skill.modifier, tempPoints = skill.tempPoints,
+                    description = skill.description ~= "" and skill.description or nil, minLevel = skill.minLevel }
+                cards[#cards + 1], named[skill.name] = card, card
+                labels[#labels + 1] = string.format("%s %d/%d", skill.name, skill.rank, skill.maxRank)
+            end
         elseif skill and skill.isCollapsed then
+            whole = false
             labels[#labels + 1] = skill.name .. " (collapsed in client)"
         end
     end
-    T.Recipes.Append(cards)
+    -- With every header open the list is the whole truth about the character's professions.
+    T.Recipes.Append(cards, whole and next(lines) and lines or nil)
     if C_TradeSkillUI and type(C_TradeSkillUI.GetRecipeInfo) == "function" then
         cards[#cards+1] = {kind="recipe_lookup",name="own_recipe_by_id"}
     end

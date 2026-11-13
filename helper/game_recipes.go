@@ -14,7 +14,7 @@ func recipeProperties() mcpObject {
 		"profession_id": mcpObject{"type": "integer", "minimum": 1, "maximum": 2147483647, "description": "Profession skill line ID."},
 		"id":            mcpObject{"type": "integer", "minimum": 1, "maximum": 2147483647, "description": "Recipe spell ID, not a product item ID."},
 		"query":         fields["query"], "offset": fields["offset"], "limit": fields["limit"],
-		"known": mcpObject{"type": "boolean", "description": "Match an explicit learned flag observed in the currently open player book. Omit to include past observations."},
+		"known": mcpObject{"type": "boolean", "description": "true: recipes seen as learned, in the open book (learned) or at an earlier look (learned_at_observation; a learned recipe stays learned). false: recipes not learned according to the currently open book only. Omit to include every observation."},
 	}
 }
 
@@ -59,7 +59,9 @@ func queryRecipes(dir string, raw json.RawMessage) (mcpObject, error) {
 		if live && explicit && q.ID != nil {
 			exactObserved = true
 		}
-		if q.Known != nil && (!live || !explicit || learned != *q.Known) {
+		// A recipe seen as learned stays learned, whenever the book was read. One seen as not learned may have
+		// been learned since, so that answer counts only from the book open now.
+		if q.Known != nil && (!explicit || learned != *q.Known || !learned && !live) {
 			return
 		}
 		total++
@@ -128,7 +130,7 @@ func queryRecipes(dir string, raw json.RawMessage) (mcpObject, error) {
 		}
 	}
 	out := mcpObject{"captured": s.Captured, "status": status, "books": books, "entries": items, "total": total,
-		"note": "Only an explicit learned field is current character evidence. No matching row means unknown; filters, hidden recipes and the capture limit can omit entries. Profession rank is not a recipe's learning requirement. Check Forever sources for acquisition and required rank."}
+		"note": "learned is read from the book open now. learned_at_observation true still holds: a learned recipe stays learned. learned_at_observation false may be out of date; open the book to confirm. No matching row means unknown; filters, hidden recipes and the capture limit can omit entries. Profession rank is not a recipe's learning requirement. Check Forever sources for acquisition and required rank."}
 	if len(books) == 0 {
 		if _, ok := s.Sections["skills"]; ok {
 			out["reason"] = "No matching own profession book was observed. Open your own profession and ask again."

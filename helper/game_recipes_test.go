@@ -55,6 +55,14 @@ Card: {"section":"skills","kind":"recipe_book","id":185,"name":"Cooking","rank":
 		if row["learned"] != nil || row["learned_at_observation"] != true || row["requirements"] != nil || row["selected"] != nil {
 			t.Fatal("historical facts presented as current", out)
 		}
+		out = query(state, "get_recipes", `,"known":true`)
+		if rows := out["entries"].([]mcpObject); out["total"] != 1 || rows[0]["recipe_id"] != 7001 || rows[0]["learned"] != nil || rows[0]["learned_at_observation"] != true {
+			t.Fatal("a recipe seen as learned is still learned when the book is closed", out)
+		}
+		out = query(state, "get_recipes", `,"known":false`)
+		if out["total"] != 0 || out["match"] != "unknown" {
+			t.Fatal("a recipe seen as not learned may have been learned since", out)
+		}
 	}
 	out = query(parseGameSnapshot("Skills: Cooking 1/75", 1770000002), "get_recipes", "")
 	if out["status"] != "unavailable" || out["total"] != 0 {

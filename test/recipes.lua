@@ -47,10 +47,36 @@ local n=lists;fire=true;bags=1;b=capture()
 assert(lists==n and b.selected.requirements[1].met and b.selected.reagentSlots[1].alternatives[1].bagCount==1)
 T.settings.context.bags=false;b=capture();assert(b.selected.reagentSlots[1].alternatives[1].bagCount==nil)
 ProfessionsFrame:Hide();b=capture();validate(b);assert(b.freshness=="last_seen" and b.selected==nil)
+wow.Event("SKILL_LINES_CHANGED");wow.Event("SPELLS_CHANGED");wow.Run(.3);b=capture()
+assert(b.freshness=="last_seen","a point of weapon skill or a login does not make a kept book stale")
+local kept={};T.Recipes.Append(kept,{[185]={rank=40,maxRank=150}})
+assert(kept[1].rank==40 and kept[1].maxRank==150 and capture().rank==1,"a kept book reports the rank its skill line has now")
+kept={};T.Recipes.Append(kept,{[171]={rank=26,maxRank=75}})
+assert(kept[1]==nil and capture().id==185,"a book of a profession the character no longer has is left out, not deleted")
+-- The Forever client lists each profession under two skill IDs.
+local lines={{skillID=171,name="Alchemy",rank=26,maxRank=75},{skillID=2937,name="Alchemy",rank=26,maxRank=75},
+    {skillID=2939,name="Cooking",rank=5,maxRank=75},{skillID=185,name="Cooking",rank=5,maxRank=75},
+    {skillID=173,name="Daggers",rank=31,maxRank=75},{skillID=9001,name="Daggers",rank=1,maxRank=75}}
+C_SkillInfo.GetNumSkillLines=function() return #lines end
+C_SkillInfo.GetSkillLineInfo=function(index) return lines[index] end
+local text=T.Context.Text()
+assert(text:find("Skills: Alchemy 26/75, Cooking 5/75, Daggers 31/75, Daggers 1/75",1,true),"a profession listed twice is reported once")
+-- Field order in a card is not fixed, so each part is looked for on its own.
+local function card(...)
+    for line in text:gmatch("Card: [^\n]+") do
+        local all=true
+        for _, part in ipairs({...}) do all=all and line:find(part)~=nil end
+        if all then return line end
+    end
+end
+assert(card('"kind":"skill"','"id":171[,}]') and card('"kind":"skill"','"id":185[,}]')
+    and not card('"id":2937[,}]') and not card('"id":2939[,}]'),"the ID kept is the one the profession's book goes by")
+assert(card('"kind":"skill"','"id":9001[,}]'),"two lines of one name with different ranks are both kept")
+assert(card('"kind":"recipe_book"','"id":185[,}]','"rank":5[,}]'),"the book in the snapshot carries the rank of its skill line")
 wow.Event("NEW_RECIPE_LEARNED",7002);wow.Run(.3);b=capture();assert(b.freshness=="stale" and not b.selected)
 own=false;ProfessionsFrame:Show();wow.Event("TRADE_SKILL_SHOW");wow.Run(.3);b=capture();assert(b.freshness=="stale" and lists==n)
 guid="Player-1-B2";assert(capture()==nil,"another player's books leaked")
 own=true;full=true;wow.Event("TRADE_SKILL_LIST_UPDATE");wow.Run(.3)
 b=capture();validate(b);assert(#b.recipes==2 and b.recipes[2][3]==0 and b.coverage=="reported_catalog")
 T.settings.context.skills=false;assert(capture()==nil)
-print("Own Cooking book, selected recipe requirements, filtered catalog, explicit unlearned flag, staleness and character isolation passed")
+print("Own Cooking book, selected recipe requirements, filtered catalog, explicit unlearned flag, staleness, live ranks, professions listed once and character isolation passed")

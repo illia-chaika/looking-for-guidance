@@ -174,17 +174,24 @@ function Recipes.Probe(id, character, login, bagCounts)
     return out
 end
 
-function Recipes.Append(cards)
+-- lines, when given, are all of the character's current skill lines by ID. A book is kept from the day its
+-- profession window was open, so its rank comes from the line, and a book whose profession the character
+-- no longer has is left out.
+function Recipes.Append(cards, lines)
     if not enabled() then return end
     local prof = ownBook()
     local stored = books() or {}
     if prof and (dirty or not reading or stored[tostring(prof.professionID)] ~= reading) then collect(prof) end
     local ordered = {}
-    for _, book in pairs(books() or {}) do ordered[#ordered+1]=book end
+    for _, book in pairs(books() or {}) do
+        if not lines or lines[book.id] or book == reading then ordered[#ordered+1]=book end
+    end
     table.sort(ordered,function(a,b) return a.id<b.id end)
     for _, cached in ipairs(ordered) do
         local card = {}
         for k,v in pairs(cached) do card[k]=v end
+        local line = lines and lines[cached.id]
+        if line then card.rank, card.maxRank = line.rank, line.maxRank end
         if prof and cached==reading and not dirty then
             card.freshness="open"
             local selected = selectedRecipe()
@@ -201,7 +208,9 @@ local scheduled = false
 events:SetScript("OnEvent", function(_, event)
     dirty, reading = true, nil
     if not enabled() then return end
-    if event=="NEW_RECIPE_LEARNED" or event=="SKILL_LINES_CHANGED" or event=="SPELLS_CHANGED" then
+    -- Only a newly learned recipe makes a kept list wrong. Skill lines change with every point of weapon skill
+    -- and spells with every login; a book's rank is read from the skill line when it is sent.
+    if event=="NEW_RECIPE_LEARNED" then
         for _, book in pairs(books() or {}) do book.invalidated=true end
     end
     if event=="TRADE_SKILL_CLOSE" or event=="PLAYER_ENTERING_WORLD" then return end
