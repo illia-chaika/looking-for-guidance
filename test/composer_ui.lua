@@ -82,4 +82,18 @@ for _, widget in ipairs(wow.texts) do
     if widget:GetText() == "Write here" and widget:IsVisible() and widget:GetWidth() > 2 then visible = true end
 end
 assert(visible and field:GetHeight() > line, "empty composer retains a visible placeholder and a full text line")
+local function prompt()
+    for _, widget in ipairs(wow.texts) do
+        local owner = widget
+        while owner and owner ~= composer do owner = owner:GetParent() end
+        if owner and widget:GetText() == "Write here" then return widget:IsVisible() end
+    end
+end
+edit:Fire("OnEditFocusGained")
+assert(not prompt(), "the prompt makes way for the cursor while the field has focus")
+set(composer, "first")
+assert(not prompt(), "a state change keeps it hidden while focused")
+edit:Fire("OnEditFocusLost")
+set(composer, "third")
+assert(edit:GetText() == "" and prompt(), "an empty field without focus shows the prompt again")
 print("Composer: measured viewport, multiline cursor, empty field, per-character reload, offline and adopted drafts OK")

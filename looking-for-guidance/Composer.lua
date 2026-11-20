@@ -328,6 +328,11 @@ function Composer.Build(parent, handlers)
     end
 
     local focused = false
+    -- The grey prompt makes way while the field has focus: on top of an empty line it hid the blinking cursor,
+    -- whose first position falls on the prompt's first letter.
+    local function prompt()
+        placeholder:SetShown(not focused and edit:GetText() == "")
+    end
     local function hint()
         local show = focused and edit:GetText() == ""
         if linkHint:IsShown() ~= show then linkHint:SetShown(show) resize() end
@@ -338,7 +343,7 @@ function Composer.Build(parent, handlers)
         if currentKey then drafts[currentKey] = self:GetText() ~= "" and self:GetText() or nil end
         refit = true
         hint()
-        placeholder:SetShown(self:GetText() == "")
+        prompt()
         send:SetEnabled(frame.canSend and strtrim(self:GetText()) ~= "")
     end)
     edit:SetScript("OnCursorChanged", function(_, _, y, _, height)
@@ -368,6 +373,7 @@ function Composer.Build(parent, handlers)
     edit:SetScript("OnEditFocusGained", function()
         focused = true
         hint()
+        prompt()
         for _, edge in ipairs(field.edges) do
             Kit.Paint(edge, "accent")
         end
@@ -375,6 +381,7 @@ function Composer.Build(parent, handlers)
     edit:SetScript("OnEditFocusLost", function()
         focused = false
         hint()
+        prompt()
         for _, edge in ipairs(field.edges) do
             Kit.Paint(edge, "edge")
         end
@@ -394,7 +401,7 @@ function Composer.Build(parent, handlers)
         picker:Sync()
         self:SwitchDraft(self.thread and self.thread.id or (state.offline and "offline" or "new"))
         placeholder:SetText(state.placeholder)
-        placeholder:SetShown(edit:GetText() == "")
+        prompt()
         send:SetEnabled(self.canSend and strtrim(edit:GetText()) ~= "")
         context.text:SetText(state.context)
         Kit.Paint(context.mark, state.contextOn and "accent" or "line-strong")
