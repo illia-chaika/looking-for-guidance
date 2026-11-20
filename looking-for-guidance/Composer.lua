@@ -145,14 +145,33 @@ function Composer.Build(parent, handlers)
     field:SetPoint("TOPLEFT", pad, -(1 + pad))
     field:SetPoint("TOPRIGHT", -pad, -(1 + pad))
 
-    local send = Kit.Key(field, nil, true)
-    send:SetGlyph("send")
-    send:SetPoint("BOTTOMRIGHT", -(Kit.space["space-1"] + 1), Kit.space["space-1"] + 1)
+    -- A flat key with equal margins: centred beside a single line, at the corner once the draft grows.
+    local sendSize = body.line + 4
+    local send = CreateFrame("Button", nil, field)
+    send:SetSize(sendSize, sendSize)
+    send:SetPoint("BOTTOMRIGHT", -inset, inset)
+    send.fill = send:CreateTexture(nil, "BACKGROUND")
+    send.fill:SetAllPoints()
+    send.glyph = Kit.Glyph(send, "send")
+    local function paintSend(hover, down)
+        local enabled = send:IsEnabled()
+        send.fill:SetShown(enabled)
+        Kit.Paint(send.fill, hover and "gold" or "accent")
+        send.glyph:SetInk(enabled and "bg" or "ink-3")
+        send.glyph:SetPoint("CENTER", 0, down and -1 or 0)
+    end
+    send:SetScript("OnEnter", function() paintSend(true) end)
+    send:SetScript("OnLeave", function() paintSend(false) end)
+    send:SetScript("OnMouseDown", function(self) paintSend(self:IsMouseOver(), self:IsEnabled()) end)
+    send:SetScript("OnMouseUp", function(self) paintSend(self:IsMouseOver()) end)
+    send:SetScript("OnEnable", function() paintSend(false) end)
+    send:SetScript("OnDisable", function() paintSend(false) end)
     send:Disable()
+    paintSend(false)
 
     local scroll = CreateFrame("ScrollFrame", nil, field)
     scroll:SetPoint("TOPLEFT", pad + 1, -inset)
-    scroll:SetPoint("BOTTOMRIGHT", field, "BOTTOMRIGHT", -(send:GetWidth() + 2 * inset), inset)
+    scroll:SetPoint("BOTTOMRIGHT", field, "BOTTOMRIGHT", -(sendSize + 2 * inset), inset)
     local edit = CreateFrame("EditBox", nil, scroll)
     edit:SetMultiLine(true)
     edit:SetAutoFocus(false)
@@ -182,12 +201,13 @@ function Composer.Build(parent, handlers)
     measure:SetWordWrap(true)
     measure:Hide()
 
-    local linkHint = Kit.Text(frame, "t-meta", "ink-2")
+    -- Always there, so focusing the field does not move it.
+    local linkHint = Kit.Text(frame, "t-hint", "ink-3")
     linkHint:SetPoint("TOPLEFT", field, "BOTTOMLEFT", 1, -3)
     T.BindLabel(linkHint, "Shift + щелчок вставляет игровую ссылку")
     linkHint:SetWordWrap(false)
     linkHint:SetPoint("RIGHT", field, "RIGHT", -1, 0)
-    linkHint:Hide()
+    local hintHeight = T.Tokens.font["t-hint"].line + 3
 
     local context = Kit.Link(frame, "t-meta", "ink-3", "ink-2")
     context:SetPoint("BOTTOMLEFT", pad, Kit.space["space-2"])
@@ -260,7 +280,7 @@ function Composer.Build(parent, handlers)
         local height = math.max(body.line * lines, math.ceil(measure:GetStringHeight())) + 4
         if edit:GetHeight() ~= height then edit:SetHeight(height) end
         field:SetHeight(math.min(LINES * body.line + 4, height) + 2 * inset)
-        frame:SetHeight(1 + pad + field:GetHeight() + 2 * Kit.space["space-2"] + Kit.space["space-4"] + (linkHint:IsShown() and 18 or 0))
+        frame:SetHeight(1 + pad + field:GetHeight() + 2 * Kit.space["space-2"] + Kit.space["space-4"] + hintHeight)
     end
     scroll:SetScript("OnSizeChanged", function() refit = true end)
     scroll:HookScript("OnShow", function() refit = true end)
@@ -328,29 +348,47 @@ function Composer.Build(parent, handlers)
     end
 
     local focused = false
-    -- The grey prompt makes way while the field has focus: on top of an empty line it hid the blinking cursor,
-    -- whose first position falls on the prompt's first letter.
+    -- The grey prompt makes way while the field has focus.
     local function prompt()
         placeholder:SetShown(not focused and edit:GetText() == "")
     end
-    local function hint()
-        local show = focused and edit:GetText() == ""
-        if linkHint:IsShown() ~= show then linkHint:SetShown(show) resize() end
+    -- The client drew no cursor in this field (seen in the game, 20.11.2026), so the composer draws its own where
+    -- the edit box reports it, blinking at the client's pace while the field has focus.
+    local caret = edit:CreateTexture(nil, "OVERLAY")
+    caret:SetWidth(2)
+    Kit.Paint(caret, "ink")
+    caret:Hide()
+    local caretX, caretY, caretHeight, blink = 1, -1, body.size + 3, 0
+    local function placeCaret()
+        caret:ClearAllPoints()
+        caret:SetPoint("TOPLEFT", edit, "TOPLEFT", caretX, caretY)
+        caret:SetHeight(caretHeight)
+        blink = 0
+        caret:SetShown(focused)
     end
+    frame.caret = caret
 
     edit:SetScript("OnTextChanged", function(self)
         if T.ApplyEditFont then T.ApplyEditFont(self, body) end
         if currentKey then drafts[currentKey] = self:GetText() ~= "" and self:GetText() or nil end
         refit = true
-        hint()
         prompt()
         send:SetEnabled(frame.canSend and strtrim(self:GetText()) ~= "")
     end)
-    edit:SetScript("OnCursorChanged", function(_, _, y, _, height)
+    edit:SetScript("OnCursorChanged", function(_, x, y, _, height)
         cursorTop, cursorHeight = math.abs(y or 0), height or body.line
+        caretX, caretY, caretHeight = x or 1, y or -1, height and height > 0 and height or caretHeight
+        placeCaret()
         refit = true
     end)
-    frame:SetScript("OnUpdate", function()
+    frame:SetScript("OnUpdate", function(_, elapsed)
+        if focused then
+            blink = blink + (elapsed or 0)
+            if blink >= (edit.GetBlinkSpeed and edit:GetBlinkSpeed() or 0.5) then
+                blink = 0
+                caret:SetShown(not caret:IsShown())
+            end
+        end
         if refit then
             refit = false
             resize()
@@ -372,7 +410,7 @@ function Composer.Build(parent, handlers)
     edit:SetScript("OnEscapePressed", edit.ClearFocus)
     edit:SetScript("OnEditFocusGained", function()
         focused = true
-        hint()
+        placeCaret()
         prompt()
         for _, edge in ipairs(field.edges) do
             Kit.Paint(edge, "accent")
@@ -380,7 +418,7 @@ function Composer.Build(parent, handlers)
     end)
     edit:SetScript("OnEditFocusLost", function()
         focused = false
-        hint()
+        caret:Hide()
         prompt()
         for _, edge in ipairs(field.edges) do
             Kit.Paint(edge, "edge")
@@ -422,7 +460,7 @@ function Composer.Build(parent, handlers)
         edit:SetFocus()
     end
 
-    frame.context, frame.choice, frame.edit = context, choice, edit
+    frame.context, frame.choice, frame.edit, frame.send = context, choice, edit, send
     frame.meter, frame.picker = meter, picker
     if T.GameLinks then T.GameLinks.Bind(edit) end
     resize()

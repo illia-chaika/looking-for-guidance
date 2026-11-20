@@ -96,4 +96,23 @@ assert(not prompt(), "a state change keeps it hidden while focused")
 edit:Fire("OnEditFocusLost")
 set(composer, "third")
 assert(edit:GetText() == "" and prompt(), "an empty field without focus shows the prompt again")
+
+-- The client drew no cursor in this field, so the composer draws one where the edit box reports it.
+local caret, height = composer.caret, composer:GetHeight()
+edit:Fire("OnEditFocusGained")
+assert(caret:IsShown(), "a caret shows as soon as the field has focus")
+edit:Fire("OnCursorChanged", 40, -24, 2, 20)
+local _, _, _, x, y = caret:GetPoint(1)
+assert(x == 40 and y == -24 and caret:GetHeight() == 20 and caret:IsShown(), "it stands where the cursor is")
+composer:Fire("OnUpdate", 0.6)
+assert(not caret:IsShown(), "and blinks")
+composer:Fire("OnUpdate", 0.6)
+assert(caret:IsShown())
+assert(composer:GetHeight() == height, "focus does not move the field: the link hint is always there")
+edit:Fire("OnEditFocusLost")
+assert(not caret:IsShown(), "no caret without focus")
+local send = composer.send
+local point, _, _, right, bottom = send:GetPoint(1)
+assert(point == "BOTTOMRIGHT" and right == -bottom and send:GetHeight() == field:GetHeight() - 2 * bottom,
+    "the send key sits with equal margins, centred beside a single line")
 print("Composer: measured viewport, multiline cursor, empty field, per-character reload, offline and adopted drafts OK")

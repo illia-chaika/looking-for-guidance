@@ -41,6 +41,7 @@ T.Tokens = {
     font = {
         ["t-label"] = { file = "PTSansNarrow-Bold.ttf", size = 12, line = 16 },
         ["t-meta"] = { file = "PTSans-Regular.ttf", size = 12, line = 16 },
+        ["t-hint"] = { file = "PTSans-Regular.ttf", size = 11, line = 14 },
         ["t-ui"] = { file = "PTSans-Regular.ttf", size = 13, line = 16 },
         ["t-ui-strong"] = { file = "PTSansNarrow-Bold.ttf", size = 13, line = 16 },
         ["t-title"] = { file = "PTSerif-Bold.ttf", size = 16, line = 21 },
