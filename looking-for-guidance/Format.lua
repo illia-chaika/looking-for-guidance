@@ -36,7 +36,7 @@ local gameActivity = {
     get_talents = "Проверяю таланты", search_spellbook = "Читаю книгу заклинаний",
     get_equipment = "Проверяю экипировку", search_bags = "Ищу в сумках",
     get_attached_links = "Смотрю вложения", get_skills = "Проверяю навыки",
-    get_recipes = "Рецепты",
+    get_recipes = "Рецепты", get_auction_prices = "Аукцион",
     get_buffs = "Проверяю эффекты", get_reputation = "Проверяю репутацию",
 }
 

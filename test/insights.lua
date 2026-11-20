@@ -34,6 +34,7 @@ assert(#asked == 1 and asked[1].kind == "digest" and asked[1].key == "me", "one 
 assert(asked[1].facts.class == "MAGE" and asked[1].facts.level == 33 and asked[1].facts.quests[1].id == 676, "it carries the character's class, level and quests")
 assert(asked[1].facts.name == nil and asked[1].locale == "enUS" and asked[1].gameLocale == "ruRU")
 assert(asked[1].cap == 60, "the daily cap from the settings travels with the request")
+assert(asked[1].market.faction == "Alliance" and asked[1].market.region == nil, "the market goes along, with what the client knows of it")
 assert(T.Store.Tracked(asked[1].seq), "a background request is confirmed like a chat message, so a lost one can be repeated")
 
 local pending = CopyTable(ready)

@@ -30,6 +30,23 @@ local function optional(fn, ...)
     if ok then return plain(a), plain(b), plain(c) end
 end
 
+local REGIONS = { "US", "KR", "EU", "TW", "CN" }
+
+-- Where this character trades. WoW: Forever has one auction house per region, ruleset and faction; the client
+-- names the ruleset only through two game rules, the way AceDB-3.0 reads them.
+function Context.Market()
+    local market = { region = REGIONS[optional(GetCurrentRegion) or 0], faction = optional(UnitFactionGroup, "player"),
+        hardcore = optional(C_GameRules and C_GameRules.IsHardcoreActive) or nil }
+    local rules, enum = C_GameRules and C_GameRules.IsGameRuleActive, Enum and Enum.GameRule
+    if rules and enum and enum.PvPRuleset and enum.RPRuleset then
+        local pvp, rp = optional(rules, enum.PvPRuleset), optional(rules, enum.RPRuleset)
+        if type(pvp) == "boolean" and type(rp) == "boolean" then
+            market.ruleset = rp and pvp and "RP-PvP" or rp and "RP" or pvp and "PvP" or "PvE"
+        end
+    end
+    return market
+end
+
 local function vitals(unit)
     local fields = {}
     local health, maxHealth = optional(UnitHealth, unit), optional(UnitHealthMax, unit)
@@ -487,8 +504,10 @@ local function capture(refs, preview, settings, previous)
     if #lines == 0 then return end
     if not preview then lines[#lines + 1] = "Detail lookup: supported" end
     local version, build = GetBuildInfo()
-    table.insert(lines, 1, string.format("Game: WoW Forever %s.%s%s", version, build,
-        optional(C_GameRules.IsHardcoreActive) and " · hardcore" or ""))
+    local market = Context.Market()
+    table.insert(lines, 1, string.format("Game: WoW Forever %s.%s%s%s%s", version, build,
+        market.region and " · " .. market.region or "", market.ruleset and " · " .. market.ruleset or "",
+        market.hardcore and " · hardcore" or ""))
     return table.concat(lines, "\n"), blocks
 end
 

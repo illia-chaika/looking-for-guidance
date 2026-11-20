@@ -62,6 +62,7 @@ local function send(kind, key, facts, options)
     local packet = { type = "insight", kind = kind, key = key, facts = facts, force = options.force or nil,
         locale = T.GetUILocale(), gameLocale = GetLocale(), cap = T.settings and T.settings.researchCap or nil }
     packet.character, packet.login = T.CharacterIdentity()
+    packet.market = T.Context.Market()
     packet.runId = T.Store.runId
     local seq, reason = T.Transport.Send(packet, BUDGET, compact)
     if not seq then

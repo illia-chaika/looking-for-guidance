@@ -281,6 +281,11 @@ func (indexes *snapshotIndexes) prompt(dir string, p packet) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Не удалось сохранить игровой снимок: %w", err)
 	}
+	if m, err := snapshotMarket(state); err == nil {
+		if err := recordMarket(auctionDir(dir), m, time.Now()); err != nil {
+			logf("Couldn't note the auction market: %v", err)
+		}
+	}
 	if indexes != nil && state.Lookup && p.RunID != "" && p.Session != "" && p.Seq > 0 {
 		indexes.remember(dir, id, p, state)
 	}

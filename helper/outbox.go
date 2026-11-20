@@ -66,6 +66,8 @@ type packet struct {
 	Force      bool            `json:"force,omitempty"`
 	Cap        int             `json:"cap,omitempty"`
 	Facts      json.RawMessage `json:"facts,omitempty"`
+	// Where the character trades, as the add-on reads it from the client.
+	Market *marketFacts `json:"market,omitempty"`
 
 	RunID  string `json:"runId,omitempty"`
 	File   string `json:"-"`

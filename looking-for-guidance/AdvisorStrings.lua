@@ -2,6 +2,7 @@ local _, T = ...
 -- en, de, fr, es, pt-BR, ko, zh-Hans, zh-Hant
 T.AddLocaleRows({
     ["Рецепты"]={"Recipes","Rezepte","Recettes","Recetas","Receitas","조리법","配方","配方"},
+    ["Аукцион"]={"Auction house","Auktionshaus","Hôtel des ventes","Casa de subastas","Casa de leilões","경매장","拍卖行","拍賣場"},
     ["Поиск без подтверждения"]={"Search returned no confirmed source","Suche ohne bestätigte Quelle","Recherche sans source confirmée","Búsqueda sin fuente confirmada","Busca sem fonte confirmada","확인된 검색 출처 없음","搜索未返回已确认的来源","搜尋未傳回已確認的來源"},
     ["Местоположение"]={"Location","Standort","Position","Ubicación","Localização","위치","位置","位置"},
     ["Сдать „{1}“"]={"Turn in {1}","{1} abgeben","Rendre {1}","Entregar {1}","Entregar {1}","{1} 완료하기","交付“{1}”","交付「{1}」"},

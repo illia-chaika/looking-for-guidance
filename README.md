@@ -15,6 +15,10 @@ Every player has typed LFG. This is the other kind: looking for guidance.
 searches current sources before answering. Shift-click items, spells and quests into the message. Each character has
 its own conversations and its own memory of decisions ("I am saving for the mount", "keep the linen").
 
+**Auction prices** (optional, macOS). With your own Battle.net API client in the keychain (see
+[Auction prices](#auction-prices)), the adviser can look up asking prices on your character's auction house before
+it tells you to buy or sell something there.
+
 **Journal.** Eight sections of advice for your character. What the game itself knows is shown at once; what needs
 research is prepared when you press the section's button — or by itself, if you switch research to automatic:
 
@@ -64,7 +68,8 @@ flowchart LR
   or [Claude Code](https://code.claude.com/docs/en/setup). You choose one in the companion's menu and everything
   goes to it — chats and journal research alike. Either way the agent is confined to the adviser's role: it reads
   character data through a local MCP server, searches the web and reads pages, and can do nothing else. Nothing but
-  the question and the tool results it asks for leaves the computer.
+  the question and the tool results it asks for leaves the computer — apart from the auction download below, when
+  you set it up.
 - **Journal research** runs as hidden one-shot jobs with a fixed output schema. The companion validates every answer
   in Go — quotes must appear in the fetched text, IDs must be ones the game sent, links must be `https` — and caches
   it on disk.
@@ -85,6 +90,9 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 - The chat footer's tooltip shows which adviser answers and how much of its allowance is left, when the provider
   reports that: Codex through its account limits, Claude Code after each turn.
 - Conversations, snapshots, memory and cached research stay on your disk.
+- Auction prices, if you set them up, come from Blizzard's Game Data API with your own API client. The companion
+  asks for nothing but your market's auction snapshot (region, ruleset and faction pick it); no character data is
+  sent. Prices and their history stay on your disk.
 
 ## Setup
 
@@ -127,6 +135,23 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 | `language` | Language of the companion's menu, such as `"ru"` or `"de"`; by default it follows the system |
 | `gameDir` | The agent's working folder; chats are tied to it, so it only matters when moving an existing setup |
 | `hotfixUrl` | Address of Blizzard's hotfix article, if it moves |
+
+### Auction prices
+
+Blizzard serves WoW: Forever's auction houses through its Game Data API, about once an hour. To let the adviser read
+them, create an API client at <https://develop.battle.net/access/clients> and put its ID and secret into the macOS
+keychain; each command asks for the value without echoing it:
+
+```sh
+security add-generic-password -U -s lfg-battlenet-id -a battlenet -w
+security add-generic-password -U -s lfg-battlenet-secret -a battlenet -w
+```
+
+The add-on reports your region, ruleset and faction with each question; the companion then downloads that market
+every 20 minutes when Blizzard has a newer snapshot, keeps a summary in
+`~/Library/Application Support/Looking for Guidance/auctions/` and a daily price history for 90 days, and offers the
+adviser the `get_auction_prices` tool. Normal and PvP markets are known; which auction house serves each Roleplay
+ruleset is not yet, so those characters get no prices. Remove the two keychain items to switch it off.
 
 ## Known issues
 

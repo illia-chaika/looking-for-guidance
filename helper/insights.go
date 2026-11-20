@@ -47,8 +47,9 @@ type insightRequest struct {
 	Kind, Key, Locale, GameLocale, Character string
 	Force                                    bool
 	// Cap is the player's own daily limit of research runs, sent with every request from the game's settings.
-	Cap   int
-	Facts json.RawMessage
+	Cap    int
+	Facts  json.RawMessage
+	Market *marketFacts
 }
 
 // insightEnv is what a job may use besides the add-on's facts.

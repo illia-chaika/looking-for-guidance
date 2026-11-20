@@ -320,10 +320,17 @@ func (s *session) receive(p packet) {
 		}
 	}
 	if p.Type == "insight" {
+		if p.Market != nil {
+			if m, err := p.Market.market(); err == nil {
+				if err := recordMarket(auctionDir(snapshotDir()), m, time.Now()); err != nil {
+					logf("Couldn't note the auction market: %v", err)
+				}
+			}
+		}
 		// Research runs beside the conversations and has its own cache, so it does not wait in the Codex queue.
 		if s.insights != nil {
 			s.insights.request(insightRequest{Kind: p.Kind, Key: p.Key, Locale: p.Locale, GameLocale: p.GameLocale,
-				Character: s.activeCharacter, Force: p.Force, Cap: p.Cap, Facts: p.Facts})
+				Character: s.activeCharacter, Force: p.Force, Cap: p.Cap, Facts: p.Facts, Market: p.Market})
 		}
 		return
 	}

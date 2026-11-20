@@ -60,6 +60,8 @@ func (a activityArgs) label(tool string) string {
 	switch tool {
 	case "get_recipes":
 		return "Рецепты"
+	case "get_auction_prices":
+		return "Аукцион"
 	case "get_memory":
 		return "Память персонажа"
 	case "upsert_memory":

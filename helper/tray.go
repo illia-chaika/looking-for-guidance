@@ -79,6 +79,7 @@ func (a *app) trayReady() {
 		a.startWatcher()
 	}
 	go a.loop()
+	go a.watchAuctions()
 
 	for {
 		select {

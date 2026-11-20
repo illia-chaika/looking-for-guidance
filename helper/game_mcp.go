@@ -16,7 +16,7 @@ var contextSections = []string{
 	"game", "character", "location", "gear", "bags", "talents", "skills", "spells", "target", "reputation", "buffs", "references", "journal",
 }
 
-func gameTools() []mcpObject {
+func gameTools(dir string) []mcpObject {
 	id := mcpObject{"type": "string", "pattern": "^[0-9a-f]{32}$", "description": "ID in the current in-game question's wow_snapshot tag."}
 	tool := func(name, description string, properties mcpObject, required []string) mcpObject {
 		properties["snapshot_id"] = id
@@ -41,6 +41,10 @@ func gameTools() []mcpObject {
 	}
 	for _, t := range entryTools {
 		tools = append(tools, tool(t.name, t.description+" "+pageHelp, t.properties(), []string{"snapshot_id"}))
+	}
+	if auctionReady(dir) {
+		tools = append(tools, tool("get_auction_prices", "Read current asking prices on this character's own auction house: lowest buyout per unit in copper, quantity on sale, cheapest price levels and the cost of buying a quantity, with the snapshot's time. Pass item IDs; pass a carried item's exact link to price that random-suffix variant. Use before advising a purchase or a sale.",
+			auctionToolSchema(), []string{"snapshot_id", "items"}))
 	}
 	noteID := mcpObject{"type": "string", "pattern": memoryKey.String(), "description": "Stable semantic key for one agreement, e.g. leveling-plan"}
 	revision := mcpObject{"type": "integer", "minimum": 0, "description": "Current revision returned by get_memory; zero only for a new note"}
@@ -72,6 +76,9 @@ func queryGameSnapshot(dir, tool string, raw json.RawMessage) (mcpObject, error)
 	}
 	if tool == "get_details" {
 		return queryDetails(dir, raw)
+	}
+	if tool == "get_auction_prices" {
+		return queryAuctionPrices(dir, raw)
 	}
 	var args gameToolArgs
 	if err := readToolArgs(raw, &args); err != nil {
@@ -185,13 +192,13 @@ func runGameMCP(in io.Reader, out io.Writer, dir string) error {
 			case !initialized:
 				fail(-32002, "Server not initialized")
 			case req.Method == "tools/list":
-				reply["result"] = mcpObject{"tools": gameTools()}
+				reply["result"] = mcpObject{"tools": gameTools(dir)}
 			case req.Method == "tools/call":
 				var p struct {
 					Name      string          `json:"name"`
 					Arguments json.RawMessage `json:"arguments"`
 				}
-				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
+				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
 					fail(-32602, "Unknown tool or invalid parameters")
 					break
 				}

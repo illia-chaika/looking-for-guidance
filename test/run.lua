@@ -475,6 +475,22 @@ check("a value the game keeps secret is left out, never sent as nil", T.Context.
 issecretvalue = function() return false end
 T.settings.context.character, T.settings.context.target = false, false
 
+-- The auction house follows region, ruleset and faction; the Game line names the first two when the client tells.
+T.settings.context.buffs = true
+local rules, region = Enum.GameRule, GetCurrentRegion
+Enum.GameRule = { PvPRuleset = 213, RPRuleset = 214 }
+C_GameRules.IsGameRuleActive = function(rule) return rule == 213 end
+GetCurrentRegion = function() return 3 end
+check("the Game line names region and ruleset", T.Context.Preview() == "Game: WoW Forever 1.60.1.70170 · EU · PvP\nBuffs: Arcane Intellect")
+C_GameRules.IsGameRuleActive = function() return true end
+local market = T.Context.Market()
+check("both rules mean Roleplay PvP", market.region == "EU" and market.ruleset == "RP-PvP" and market.faction == "Alliance")
+C_GameRules.IsGameRuleActive = function() error("not in this client") end
+check("a client without the rules says nothing about them", T.Context.Market().ruleset == nil)
+Enum.GameRule, GetCurrentRegion, C_GameRules.IsGameRuleActive = rules, region, nil
+check("without them the line is as before", T.Context.Preview() == "Game: WoW Forever 1.60.1.70170\nBuffs: Arcane Intellect")
+T.settings.context.buffs = false
+
 local function exchange(turns, n, at)
     table.insert(turns, { role = "user", text = "question " .. n, at = at })
     table.insert(turns, { role = "activity", text = "Read 1 file", items = {} })
