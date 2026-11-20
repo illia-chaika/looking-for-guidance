@@ -125,3 +125,55 @@ func TestVolumeRefusalReadingInstalledAddonDoesNotAskToRestartWoW(t *testing.T) 
 		t.Fatalf("left an incorrect restart notice on a volume with refused access: %+v", p)
 	}
 }
+
+// A refusal at the moment the game closed once left the companion paused through the next session (20.11.2026).
+func TestVolumeRefusalIsTriedOnceMoreWhenTheGameStartsAgain(t *testing.T) {
+	requireVolumePermissionFixture(t)
+	if runtime.GOOS != "darwin" {
+		t.Skip("drives the macOS process watcher")
+	}
+	wow := t.TempDir()
+	flavor := filepath.Join(wow, ".flavor.info")
+	if err := os.WriteFile(flavor, []byte("Product Flavor!STRING:0\nwowf\n"), 0000); err != nil {
+		t.Fatal(err)
+	}
+	a := &app{settings: settings{WowDir: wow}, rescan: make(chan struct{}, 1)}
+	a.poll()
+	a.poll()
+	if !a.denied {
+		t.Fatal("the unreadable folder is refused")
+	}
+	t.Setenv("LOOKING_FOR_GUIDANCE_TEST_MODE", "child")
+	launch := func() *exec.Cmd {
+		// A fresh file each time: macOS kills a process started from an executable rewritten in place.
+		os.Remove(filepath.Join(wow, "WowB.exe"))
+		game := exec.Command(copyTestProcess(t, wow, "WowB.exe"))
+		if err := game.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { game.Process.Kill(); game.Wait() })
+		return game
+	}
+	game := launch()
+	a.poll()
+	if !a.denied || !a.view().retryAccess {
+		t.Fatal("a launch while access is still refused returns to the pause")
+	}
+	if err := os.Chmod(flavor, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		a.poll()
+	}
+	if !a.denied || a.wowDir != "" {
+		t.Fatal("one attempt per launch, not one per tick")
+	}
+	game.Process.Kill()
+	game.Wait()
+	a.poll()
+	launch()
+	a.poll()
+	if a.denied || a.wowDir != wow {
+		t.Fatalf("the next launch tries again and finds access granted: denied=%v dir=%q", a.denied, a.wowDir)
+	}
+}

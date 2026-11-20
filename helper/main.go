@@ -119,6 +119,10 @@ type app struct {
 	checking            updateCheck
 	show                func(trayView)
 	shown               trayView
+
+	// While access is refused the tray still watches the process list, so that a new launch of the game is one
+	// more attempt: a refusal can be a passing disk error at the moment the game closed.
+	deniedWatched, deniedPlaying bool
 }
 
 type trayView struct {
@@ -171,7 +175,7 @@ func (a *app) volumeRefused(err error) bool {
 	a.denied = true
 	a.mu.Unlock()
 	if first {
-		logf("Game folder permission denied; waiting for explicit retry")
+		logf("Game folder permission denied; waiting for Retry access or the next launch of the game")
 	}
 	return true
 }
@@ -200,13 +204,23 @@ func (a *app) poll() {
 		a.volumeRefused(os.ErrPermission)
 	}
 	if denied {
+		// Only the process list is read here, never the volume: one attempt per launch, not one per tick.
+		playing := runningWowDir(firstOf(dir, saved), processPaths()) != ""
+		a.mu.Lock()
+		relaunched := playing && a.deniedWatched && !a.deniedPlaying
+		a.deniedWatched, a.deniedPlaying = true, playing
+		a.mu.Unlock()
+		if relaunched {
+			logf("World of Warcraft started again; trying its folder once more")
+			retry = true
+		}
 		if !retry {
 			a.publish()
 			return
 		}
 		a.stopSession()
 		a.mu.Lock()
-		a.denied, a.running, a.restart, a.wowDir, a.problem = false, false, false, "", ""
+		a.denied, a.running, a.restart, a.wowDir, a.problem, a.deniedWatched = false, false, false, "", "", false
 		a.mu.Unlock()
 		dir = ""
 	}
