@@ -304,3 +304,60 @@ func TestAuctionToolShowsInTheActivityLine(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
+	e, _, prompts := testEngine(t, func(*insightJob, string) (string, error) {
+		return `{"summary":"Две вещи на аукцион.","items":[{"item_id":765,"verdict":"auction","reason":"Травники платят 40 медяков."},{"item_id":4562,"verdict":"auction","reason":"Топор берут за 2,5 золотых."}]}`, nil
+	})
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	dir := filepath.Join(filepath.Dir(e.dir), "auctions")
+	os.MkdirAll(dir, 0o700)
+	put := func(herb int64) {
+		book := auctionBook{Market: m, Modified: map[string]string{"auctions": "Fri, 20 Nov 2026 17:23:20 GMT"}, Items: map[int]*auctionItem{
+			765: {Unit: herb, Listed: 120, Listings: 3, Variants: []*auctionVariant{{Unit: herb, Listed: 120, Listings: 3, Tiers: [][2]int64{{herb, 120}}}}},
+			4562: {Unit: 9000, Listed: 3, Listings: 3, Variants: []*auctionVariant{
+				{Bonus: []int{12722}, Unit: 9000, Listed: 1, Listings: 1, Tiers: [][2]int64{{9000, 1}}},
+				{Bonus: []int{12721}, Unit: 25000, Listed: 2, Listings: 2, Tiers: [][2]int64{{25000, 2}}}}},
+		}}
+		data, _ := json.Marshal(book)
+		os.WriteFile(filepath.Join(dir, "eu-114.json"), data, 0o600)
+	}
+	put(40)
+	req := insightRequest{Kind: "bags", Key: "WARLOCK:10:2-1", Locale: "ruRU", GameLocale: "enUS", Character: "Player-1-0A",
+		Market: &marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"},
+		Facts:  json.RawMessage(`{"class":"WARLOCK","level":10,"items":[{"id":765,"name":"Silverleaf","q":1,"n":34,"sell":8},{"id":4562,"name":"Severing Axe of the Monkey","q":2,"n":1,"link":"item:4562::::::::10:1490:::1:12721"}],"priced":[{"id":2589}]}`)}
+	e.request(req)
+	var data bagsData
+	json.Unmarshal(waitInsight(t, e, "bags", "ready").Data, &data)
+	prompt := (*prompts)[0]
+	if !strings.Contains(prompt, `{"4562":[25000,2],"765":[40,120]}`) || strings.Contains(prompt, "priced") || !strings.Contains(prompt, "about 5%") {
+		t.Fatalf("the prompt carries the prices of the variants it judges and nothing ruled out: %s", prompt)
+	}
+	at := time.Date(2026, 11, 20, 17, 23, 20, 0, time.UTC).Unix()
+	if len(data.Prices) != 2 || data.PricesAt != at || len(data.Items) != 2 {
+		t.Fatalf("shown answer: %+v", data)
+	}
+
+	// A cached answer is shown again with the newest prices, without another run.
+	put(55)
+	e.request(req)
+	time.Sleep(50 * time.Millisecond)
+	json.Unmarshal(waitInsight(t, e, "bags", "ready").Data, &data)
+	herb := 0
+	for _, p := range data.Prices {
+		if p.ID == 765 {
+			herb = int(p.Unit)
+		}
+	}
+	if herb != 55 || len(*prompts) != 1 {
+		t.Fatalf("prices follow the snapshot: %d after %d runs", herb, len(*prompts))
+	}
+
+	// Without a market the job runs as before.
+	req.Market, req.Key = nil, "WARLOCK:10:2-2"
+	e.request(req)
+	time.Sleep(50 * time.Millisecond)
+	if p := (*prompts)[len(*prompts)-1]; !strings.Contains(p, "no prices available") {
+		t.Fatal("without auction data the prompt says so")
+	}
+}

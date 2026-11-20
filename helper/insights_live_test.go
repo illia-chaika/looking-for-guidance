@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,7 +15,8 @@ import (
 //
 //	FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper
 //
-// FOREVER_LIVE names the kind; FOREVER_FACTS and FOREVER_KEY override the sample character.
+// FOREVER_LIVE names the kind; FOREVER_FACTS and FOREVER_KEY override the sample character. FOREVER_MARKET
+// ("EU PvE Horde") first downloads that auction house with the keychain's Battle.net client, for the bags job.
 func TestLiveInsight(t *testing.T) {
 	kind := os.Getenv("FOREVER_LIVE")
 	if kind == "" {
@@ -29,7 +33,19 @@ func TestLiveInsight(t *testing.T) {
 	if key == "" {
 		key = "live"
 	}
-	e := newInsightEngine(t.TempDir(), func() {}, func() (string, string) {
+	dir := t.TempDir()
+	var market *marketFacts
+	if fields := strings.Fields(os.Getenv("FOREVER_MARKET")); len(fields) == 3 {
+		market = &marketFacts{Region: fields[0], Ruleset: fields[1], Faction: fields[2]}
+		m, err := market.market()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := newAuctionWatcher(filepath.Join(filepath.Dir(dir), "auctions")).update(context.Background(), m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := newInsightEngine(dir, func() {}, func() (string, string) {
 		// FOREVER_LIVE_AGENT=claude runs the same job through Claude Code.
 		if os.Getenv("FOREVER_LIVE_AGENT") == "claude" {
 			return "claude", findInstalled("claude")
@@ -42,7 +58,7 @@ func TestLiveInsight(t *testing.T) {
 	ready := true
 	e.pump(&ready)
 	started := time.Now()
-	e.request(insightRequest{Kind: kind, Key: key, Locale: "ruRU", GameLocale: "enUS", Character: "Player-1-0A", Facts: json.RawMessage(facts)})
+	e.request(insightRequest{Kind: kind, Key: key, Locale: "ruRU", GameLocale: "enUS", Character: "Player-1-0A", Facts: json.RawMessage(facts), Market: market})
 	for time.Since(started) < insightTimeout+time.Minute {
 		for _, in := range e.view() {
 			if in.State == "pending" {

@@ -17,7 +17,7 @@ function UnitLevel() return 10 end
 local stock = {
     { 2589, "Linen Cloth", 1, 0, "Trade Goods", "Cloth", "", 13, 7, nil, 20 },
     { 2589, "Linen Cloth", 1, 0, "Trade Goods", "Cloth", "", 13, 7, nil, 6 },
-    { 4562, "Severing Axe of the Monkey", 2, 9, "Weapon", "Two-Handed Axes", "INVTYPE_2HWEAPON", 310, 2, "Two-Handed Axes", 1 },
+    { 4562, "Severing Axe of the Monkey", 2, 9, "Weapon", "Two-Handed Axes", "INVTYPE_2HWEAPON", 310, 2, "Two-Handed Axes", 1, "10:1490:::1:12721" },
     { 117, "Broken Fang", 0, 0, "Miscellaneous", "Junk", "", 4, 15, nil, 3 },
     { 3238, "Johaan's Findings", 1, 0, "Quest", "Quest", "", 0, 12, nil, 1 },
     { 250366, "Recipe: Minor Cleric's Elixir", 1, 0, "Recipe", "Alchemy", "", 25, 9, "Requires Alchemy (45)", 1 },
@@ -25,7 +25,7 @@ local stock = {
     { 15275, "Staff of the Sage", 2, 20, "Weapon", "Staves", "INVTYPE_2HWEAPON", 900, 2, "Requires Level 20", 1 },
     { 4604, "Forest Mushroom Cap", 1, 0, "Consumable", "Food & Drink", "", 1, 0, nil, 1 },
 }
-local function link(s) return "|cffffffff|Hitem:" .. s[1] .. "::::::::|h[" .. s[2] .. "]|h|r" end
+local function link(s) return "|cffffffff|Hitem:" .. s[1] .. "::::::::" .. (s[12] or "") .. "|h[" .. s[2] .. "]|h|r" end
 C_Container = {
     GetContainerNumSlots = function(b) return b == 0 and #stock or 0 end,
     GetContainerNumFreeSlots = function(b) return b == 0 and 1 or 0, 0 end,
@@ -93,6 +93,10 @@ local first = asked[1].facts.items[1]
 assert(first.id == 2589 and first.n == 26 and first.type == "Trade Goods" and first.sell == 13 and asked[1].facts.class == "WARLOCK")
 assert(asked[1].facts.items[3].tip == "Use: Restores 58 health over 18 sec.", "the item's own tooltip text travels with it, so the helper judges its real effect")
 assert(card().rows[#card().rows].kind == "pending")
+local priced = asked[1].facts.priced
+assert(#priced == 2 and priced[1].id == 4562 and priced[1].link == "item:4562::::::::10:1490:::1:12721" and priced[2].link == nil,
+    "items the client ruled out go along by id for their price, a random-suffix one with its exact variant")
+assert(first.link == nil, "an item without random bonuses needs no link")
 
 local payload = CopyTable(ready)
 payload.rev = ready.rev + 1
@@ -104,6 +108,24 @@ T.Sync.Check()
 c = card()
 assert(section(c, "Sell to a vendor") == "Linen Cloth ×26; Broken Fang ×3" and section(c, "Put in the bank") == "Earthroot ×5")
 assert(section(c, "Use now") == "Forest Mushroom Cap" and c.rows[1].title == "A vendor will free 5 slots")
+
+-- With auction prices the helper adds what each item asks for on the character's market.
+payload = CopyTable(payload)
+payload.rev = payload.rev + 1
+local data = payload.insights[1].data
+data.items[2] = { item_id = 2449, verdict = "auction", reason = "Herbalists pay well." }
+data.prices, data.prices_at = { { id = 2449, unit = 40, listed = 120 }, { id = 4562, unit = 25000, listed = 2 } }, 1794600000
+wow.payload = payload
+T.Sync.Check()
+c = card()
+local herb, axe = row(c, "Earthroot ×5"), row(c, "Severing Axe of the Monkey")
+assert(section(c, "List on the auction house") == "Earthroot ×5" and herb.value == "≈0g 2s 0c", herb.value)
+assert(herb.text == "Herbalists pay well. On the auction house from 0g 0s 40c each, 120 on sale.", herb.text)
+assert(axe.value == "0g 3s 10c" and axe.text == "Two-Handed Axes On the auction house from 2g 50s 0c each, 2 on sale.", axe.text)
+assert(row(c, "Linen Cloth ×26").text == "Cheap cloth.", "an item nobody sells keeps its reason alone")
+local stamp
+for _, r in ipairs(c.rows) do if r.kind == "text" and r.text:find("Blizzard", 1, true) then stamp = r.text end end
+assert(stamp == "Auction prices: Blizzard's snapshot of " .. date("%H:%M", 1794600000) .. ".", stamp)
 
 -- A remembered wish wins over the advice to sell.
 T.Store.memory = { character = "Player-1-121A", login = "login", notes = { { scope = "character", topic = "bags", text = "Keep my Linen Cloth for bandages." } } }

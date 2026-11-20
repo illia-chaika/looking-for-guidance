@@ -109,22 +109,35 @@ local function current(m)
     return cache
 end
 
--- The items the client could not judge, in the short form the helper needs.
+-- The exact variant of an item with random bonuses ("of the Bear"), which sells at its own price.
+local function variant(item)
+    local payload = T.GameDetails.Link("item", item.id, item.link)
+    if not payload then return nil end
+    local fields = {}
+    for field in (payload .. ":"):gmatch("([^:]*):") do fields[#fields + 1] = field end
+    if (tonumber(fields[14]) or 0) > 0 then return payload end
+end
+
+-- The items the client could not judge, in the short form the helper needs. Items it ruled out itself go along
+-- only by id, so the helper can show what they fetch on the auction house.
 local function request(m, items)
-    local undecided, sum = {}, 0
+    local undecided, priced, sum = {}, {}, 0
     for _, item in ipairs(items) do
         if not item.verdict and #undecided < 30 then
             undecided[#undecided + 1] = { id = item.id, name = item.name, q = item.quality, type = item.kind, sub = item.sub,
                 req = item.required and item.required > 1 and item.required or nil, sell = item.price > 0 and item.price or nil,
-                n = item.count, slot = item.equip, tip = item.tip, worn = wornText(item.equip) }
+                n = item.count, slot = item.equip, tip = item.tip, worn = wornText(item.equip), link = variant(item) }
             sum = (sum + item.id * 31) % 1000000007
+        elseif item.verdict == "unusable" and #priced < 20 then
+            priced[#priced + 1] = { id = item.id, link = variant(item) }
         end
     end
     if #undecided == 0 then return end
     local profile = Data.Profile()
     local band = profile.level and math.floor(profile.level / 10) * 10 or 0
     local key = (profile.class or "") .. ":" .. band .. ":" .. #undecided .. "-" .. sum
-    return key, { class = profile.class, level = profile.level, professions = profile.professions, items = undecided }
+    return key, { class = profile.class, level = profile.level, professions = profile.professions, items = undecided,
+        priced = #priced > 0 and priced or nil }
 end
 
 local function ask(m, options)
@@ -146,8 +159,9 @@ Hub.Extend("bags", {
         local key = request(m, items)
         local state, found
         if key then state, found = Insights.State(KIND, key) end
-        local judged = {}
+        local judged, prices = {}, {}
         for _, verdict in ipairs(state == "ready" and found.data and found.data.items or {}) do judged[verdict.item_id] = verdict end
+        for _, price in ipairs(state == "ready" and found.data and found.data.prices or {}) do prices[price.id] = price end
 
         local rows, groups = {}, {}
         local plan = c.plan and c.plan:lower() or ""
@@ -186,10 +200,15 @@ Hub.Extend("bags", {
                 for index, entry in ipairs(list) do
                     if index > 10 then break end
                     local item = entry.item
-                    local total = item.price * item.count
+                    local total, price = item.price * item.count, section[1] ~= "keep" and prices[item.id]
+                    local value = section[1] ~= "keep" and total > 0 and money(total) or nil
+                    local text = entry.reason
+                    if price then
+                        if section[1] == "auction" then value = "≈" .. money(price.unit * item.count) end
+                        text = (text and text .. " " or "") .. L("На аукционе от {1} за штуку, выставлено: {2}.", money(price.unit), price.listed)
+                    end
                     rows[#rows + 1] = { kind = "check", state = section[1] == "keep" and "done" or nil, link = item.link,
-                        title = item.name .. (item.count > 1 and " ×" .. item.count or ""), text = entry.reason,
-                        value = section[1] ~= "keep" and total > 0 and money(total) or nil }
+                        title = item.name .. (item.count > 1 and " ×" .. item.count or ""), text = text, value = value }
                 end
             end
         end
@@ -200,6 +219,10 @@ Hub.Extend("bags", {
             rows[#rows + 1] = { kind = "actions", actions = { { label = L("Проверить заново"), click = function() ask(m, { force = true }) end } } }
         elseif state == "ready" then
             if found.data.summary then rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = found.data.summary } end
+            if next(prices) and found.data.prices_at then
+                rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail",
+                    text = L("Цены аукциона — снимок Blizzard от {1}.", date("%H:%M", found.data.prices_at)) }
+            end
             rows[#rows + 1] = { kind = "sources", list = {}, at = found.at }
         elseif key then
             rows[#rows + 1] = { kind = "actions", actions = { { label = L("Оценить остальные предметы"), click = function() ask(m) end } } }

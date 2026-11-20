@@ -121,6 +121,8 @@ T.AddLocaleRows({
 })
 T.AddLocaleRows({
     ["Что продать, убрать и оставить"] = {"What to sell, store and keep","Was verkaufen, lagern und behalten","Quoi vendre, ranger et garder","Qué vender, guardar y conservar","O que vender, guardar e manter","팔 것, 보관할 것, 남길 것","该卖、该存、该留","該賣、該存、該留"},
+    ["На аукционе от {1} за штуку, выставлено: {2}."] = {"On the auction house from {1} each, {2} on sale.","Im Auktionshaus ab {1} pro Stück, {2} im Angebot.","À l’hôtel des ventes à partir de {1} l’unité, {2} en vente.","En la casa de subastas desde {1} la unidad, {2} a la venta.","Na casa de leilões a partir de {1} cada, {2} à venda.","경매장 최저가 개당 {1}, 판매 중 {2}개.","拍卖行每件最低 {1}，在售 {2} 件。","拍賣場每件最低 {1}，在售 {2} 件。"},
+    ["Цены аукциона — снимок Blizzard от {1}."] = {"Auction prices: Blizzard's snapshot of {1}.","Auktionspreise: Blizzards Stand von {1}.","Prix de l’hôtel des ventes : relevé de Blizzard de {1}.","Precios de subasta: instantánea de Blizzard de las {1}.","Preços do leilão: retrato da Blizzard das {1}.","경매장 가격: Blizzard 기준 {1}.","拍卖价格：Blizzard {1} 的快照。","拍賣價格：Blizzard {1} 的快照。"},
     ["Продать торговцу"] = {"Sell to a vendor","An Händler verkaufen","Vendre à un marchand","Vender a un vendedor","Vender a um comerciante","상인에게 판매","卖给商人","賣給商人"},
     ["Тебе не подойдёт"] = {"Not usable by you","Für dich nicht nutzbar","Inutilisable pour toi","No lo puedes usar","Você não pode usar","내가 쓸 수 없음","你无法使用","你無法使用"},
     ["Выставить на аукцион"] = {"List on the auction house","Ins Auktionshaus stellen","Mettre à l’hôtel des ventes","Poner en la casa de subastas","Colocar na casa de leilões","경매장에 등록","上架拍卖行","上架拍賣場"},

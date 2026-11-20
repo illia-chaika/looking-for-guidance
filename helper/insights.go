@@ -54,9 +54,10 @@ type insightRequest struct {
 
 // insightEnv is what a job may use besides the add-on's facts.
 type insightEnv struct {
-	Feed  *gameFeed
-	Notes []string
-	Extra string // text of further pages the helper fetched itself
+	Feed    *gameFeed
+	Notes   []string
+	Extra   string       // text of further pages the helper fetched itself
+	Auction *auctionBook // the character's auction house, when the player set up auction prices
 }
 
 type insightKind struct {
@@ -67,10 +68,13 @@ type insightKind struct {
 	feed         bool // the answer depends on the current hotfix list
 	issues       bool // the job also reads Blizzard's known-issues thread
 	notes        bool // the answer depends on what the player asked the advisor to remember
+	auction      bool // the job reads the character's auction house
 	perCharacter bool
 	schema       string
 	prompt       func(insightRequest, insightEnv) (string, error)
 	check        func(raw []byte, req insightRequest, env insightEnv) (any, error)
+	// decorate adds current facts to a ready answer each time it is shown, cached or fresh.
+	decorate func(data json.RawMessage, req insightRequest, env insightEnv) json.RawMessage
 }
 
 type insightRecord struct {
@@ -187,6 +191,11 @@ func (e *insightEngine) view() []insight {
 
 // finish publishes a result for the character who asked. A result that arrives after a character change stays on disk only.
 func (e *insightEngine) finish(job *insightJob, rec insightRecord) {
+	if rec.State == "ready" && job.kind.decorate != nil {
+		if data := job.kind.decorate(rec.Data, job.req, job.env); len(data) <= maxInsightData {
+			rec.Data = data
+		}
+	}
 	e.mu.Lock()
 	delete(e.active, job.id)
 	if job.req.Character == e.character {
@@ -224,6 +233,11 @@ func (e *insightEngine) resolve(job *insightJob) {
 	}
 	if e.notes != nil && job.kind.notes {
 		job.env.Notes = e.notes(job.req.Character)
+	}
+	if job.kind.auction && job.req.Market != nil {
+		if m, err := job.req.Market.market(); err == nil {
+			job.env.Auction, _ = loadAuctionBook(filepath.Join(filepath.Dir(e.dir), "auctions", m.key()+".json"))
+		}
 	}
 	now := e.now()
 	var rec insightRecord

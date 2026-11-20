@@ -540,19 +540,54 @@ type bagVerdict struct {
 type bagsData struct {
 	Summary string       `json:"summary"`
 	Items   []bagVerdict `json:"items"`
+	// Current asking prices for the judged items and for those the client ruled out itself, added when shown.
+	Prices   []bagPrice `json:"prices,omitempty"`
+	PricesAt int64      `json:"prices_at,omitempty"`
+}
+
+type bagPrice struct {
+	ID     int   `json:"id"`
+	Unit   int64 `json:"unit"`
+	Listed int   `json:"listed"`
+}
+
+// bagFacts are the parts of the Bags card's facts the helper reads itself; "priced" lists items the client already
+// judged, sent only so their auction price can be shown.
+type bagFacts struct {
+	Items []struct {
+		ID   int    `json:"id"`
+		Link string `json:"link"`
+	} `json:"items"`
+	Priced []struct {
+		ID   int    `json:"id"`
+		Link string `json:"link"`
+	} `json:"priced"`
+}
+
+// bagPrices looks the listed items up on the character's auction house; items nobody sells are left out.
+func bagPrices(book *auctionBook, facts bagFacts) []bagPrice {
+	var out []bagPrice
+	seen := map[int]bool{}
+	for _, item := range append(facts.Items, facts.Priced...) {
+		if book == nil || seen[item.ID] {
+			continue
+		}
+		seen[item.ID] = true
+		entry := auctionEntry(book.Items[item.ID], item.ID, item.Link, 0)
+		if unit, ok := entry["unit"].(int64); ok {
+			out = append(out, bagPrice{ID: item.ID, Unit: unit, Listed: asInt(entry["listed"])})
+		}
+	}
+	return out
 }
 
 var bagsKind = &insightKind{
-	version: "bags-1", effort: "low", ttl: 7 * 24 * time.Hour, notes: true, perCharacter: true,
+	version: "bags-2", effort: "low", ttl: 7 * 24 * time.Hour, notes: true, auction: true, perCharacter: true,
 	schema: `{"type":"object","additionalProperties":false,"required":["summary","items"],"properties":{"summary":{"type":"string"},
 "items":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["item_id","verdict","reason"],"properties":{
 "item_id":{"type":"integer"},"verdict":{"type":"string","enum":["keep","sell","auction","bank","use"]},"reason":{"type":"string"}}}}}}`,
 	prompt: func(req insightRequest, env insightEnv) (string, error) {
-		var facts struct {
-			Items []struct {
-				ID int `json:"id"`
-			} `json:"items"`
-		}
+		var facts bagFacts
 		if err := readFacts(req, &facts); err != nil || len(facts.Items) == 0 {
 			return "", errors.New("the game sent no items to sort")
 		}
@@ -560,9 +595,26 @@ var bagsKind = &insightKind{
 		if len(env.Notes) > 0 {
 			notes = "- " + strings.Join(env.Notes, "\n- ")
 		}
+		var shown map[string]json.RawMessage
+		if err := json.Unmarshal(req.Facts, &shown); err != nil {
+			return "", err
+		}
+		delete(shown, "priced") // already judged by the client; sent for their prices only
+		character, _ := json.Marshal(shown)
+		auction := "Auction house: no prices available; judge from item quality and kind."
+		if env.Auction != nil {
+			facts.Priced = nil
+			prices := map[int][2]int64{}
+			for _, p := range bagPrices(env.Auction, facts) {
+				prices[p.ID] = [2]int64{p.Unit, int64(p.Listed)}
+			}
+			list, _ := json.Marshal(prices)
+			auction = "Auction house on this character's market now, by item id: [lowest asking price per unit in copper, quantity on sale]; an item missing here has no listing: " + string(list)
+		}
 		return insightPreamble(req) + strings.Join([]string{
 			"Task: the player's bags are filling up. For each listed item decide what to do with it, for this character.",
-			"Character and items (JSON). Per item: id, name, q = quality (0 poor … 4 epic), type and sub = the client's item class and subclass, req = required level, sell = vendor price in copper for one, n = how many, slot = equip slot when it is gear, tip = what the item's own tooltip says in the game (its effect and stats), worn = what the character wears in that slot now: " + string(req.Facts),
+			"Character and items (JSON). Per item: id, name, q = quality (0 poor … 4 epic), type and sub = the client's item class and subclass, req = required level, sell = vendor price in copper for one, n = how many, slot = equip slot when it is gear, tip = what the item's own tooltip says in the game (its effect and stats), worn = what the character wears in that slot now, link = the exact variant when it has random bonuses: " + string(character),
+			auction,
 			"",
 			"What the player asked the advisor to remember, in their own words. These wishes win over everything else:",
 			notes,
@@ -574,6 +626,7 @@ var bagsKind = &insightKind{
 			`- "auction": no use to this character but usually worth more to others than the vendor pays: uncommon or better gear for other classes, trade goods for professions they lack, recipes.`,
 			`- "sell": no use to this character and not worth auctioning.`,
 			"Rules:",
+			"- With auction prices: \"auction\" only when the asking price clearly beats the vendor price after the auction house keeps about 5% and a deposit, and the item is on sale there; a price far below the vendor's or a single listing is no evidence. Name the price in the reason. Without a listing judge by quality and kind as before.",
 			"- Judge from the tooltip text (tip), the item's class and subclass, required level and the character's class, level and professions. An effect is what tip says, nothing more; without a tip do not guess the effect, answer keep and say what to check.",
 			"- Spare gear: compare tip with worn. Clearly worse than what is worn, or stats this class does not use, means sell or auction; better means keep and say to equip it.",
 			"- A consumable whose effect does not help this class (for example attack power for a caster) is sell or auction, not keep.",
@@ -618,6 +671,18 @@ var bagsKind = &insightKind{
 			return nil, errors.New("no item was judged")
 		}
 		return out, nil
+	},
+	decorate: func(data json.RawMessage, req insightRequest, env insightEnv) json.RawMessage {
+		var answer bagsData
+		var facts bagFacts
+		if env.Auction == nil || json.Unmarshal(data, &answer) != nil || readFacts(req, &facts) != nil {
+			return data
+		}
+		answer.Prices, answer.PricesAt = bagPrices(env.Auction, facts), env.Auction.modifiedAt().Unix()
+		if out, err := json.Marshal(answer); err == nil {
+			return out
+		}
+		return data
 	},
 }
 

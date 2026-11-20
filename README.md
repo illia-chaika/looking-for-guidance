@@ -29,7 +29,7 @@ research is prepared when you press the section's button — or by itself, if yo
 | Route | The next stop for the quests you carry |
 | Where to level | Zones and dungeons for your next five levels, with quieter alternatives |
 | Quest check | Is this quest bugged, changed, or am I missing something? Verdicts come with a quoted source |
-| Bags | What to sell, auction, bank, use or keep, judged by tooltips, your professions and your notes |
+| Bags | What to sell, auction, bank, use or keep, judged by tooltips, your professions and your notes; with auction prices set up, what each item asks for on your market |
 | Gold and training | Which ranks are worth buying, what to skip, and whether you will afford the mount |
 | Dungeons | Quests to pick up before you enter, where to get them, and tips for a first run |
 
@@ -176,11 +176,14 @@ for t in test/*.lua; do [ "$t" = test/wow.lua ] || lua "$t" || break; done
 python3 test/install_quiesce.py && python3 test/install_addon_payload.py
 ```
 
-Two checks talk to the real world and are off by default:
+Three checks talk to the real world and are off by default:
 
 - `FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper` runs one journal research job against the real
   agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too). It spends allowance.
-  Add `FOREVER_LIVE_AGENT=claude` to run it through Claude Code.
+  Add `FOREVER_LIVE_AGENT=claude` to run it through Claude Code, and `FOREVER_MARKET="EU PvE Horde"` to give the
+  `bags` job a real auction house first (needs the Battle.net client in the keychain).
+- `FOREVER_AUCTION="EU PvE Horde" go test -run TestLiveAuction -v ./helper` downloads that auction house with the
+  keychain's Battle.net client and checks the summary.
 - `FOREVER_FRAMES=/Volumes/GameDisk go test -run TestFrameSoak -v ./helper` writes `AddOns.txt` to a temporary
   folder on that disk the way the game does and reads it with the companion's own watcher.
 
