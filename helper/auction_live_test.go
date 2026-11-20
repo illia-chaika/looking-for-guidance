@@ -44,4 +44,13 @@ func TestLiveAuction(t *testing.T) {
 	if changed, err := w.update(context.Background(), m); err != nil || changed {
 		t.Fatal("the same snapshot is not downloaded twice:", changed, err)
 	}
+	if err := w.refreshItems(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	items, err := loadItemTable(w.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidates, left := upgradeCandidates(book, items, "chest", 10000)
+	t.Logf("item table of build %s: %d gear items; chest under 1 gold: %d items sent, %d left out", items.Build, len(items.Items), len(candidates), left)
 }

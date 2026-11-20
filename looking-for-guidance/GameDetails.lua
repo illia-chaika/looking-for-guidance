@@ -208,6 +208,10 @@ local function answer(state, attempt)
 end
 
 function Details.Receive(request)
+    -- One request at a time travels in the payload; an auction upgrade search has its own handler.
+    local upgrade = type(request) == "table" and request.upgrade ~= nil
+    T.AuctionUpgrades.Receive(upgrade and request or nil)
+    if upgrade then request = nil end
     if type(request) ~= "table" then current = nil; return end
     if request.session ~= T.Transport.session or type(request.id) ~= "string" or #request.id > 80
         or type(request.refs) ~= "table" or #request.refs < 1 or #request.refs > 6 then return end

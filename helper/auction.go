@@ -523,7 +523,8 @@ func recentMarkets(dir string, now time.Time) []auctionMarket {
 }
 
 func (w *auctionWatcher) refresh(ctx context.Context) {
-	for _, m := range recentMarkets(w.dir, w.now()) {
+	markets := recentMarkets(w.dir, w.now())
+	for _, m := range markets {
 		changed, err := w.update(ctx, m)
 		switch {
 		case errors.Is(err, errNoBattleNetClient):
@@ -532,6 +533,11 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 			logf("Auction house %s: %v", m.label(), err)
 		case changed:
 			logf("Auction house %s: new snapshot downloaded", m.label())
+		}
+	}
+	if len(markets) > 0 {
+		if err := w.refreshItems(ctx); err != nil {
+			logf("Item table for auction upgrades: %v", err)
 		}
 	}
 }

@@ -25,6 +25,8 @@ type detailRequest struct {
 	Character string    `json:"character,omitempty"`
 	Login     string    `json:"login,omitempty"`
 	BagCounts bool      `json:"bagCounts,omitempty"`
+	// Upgrade asks the add-on to judge auction candidates for one equipment slot instead of reading cards.
+	Upgrade *upgradeQuery `json:"upgrade,omitempty"`
 }
 
 type detailEnvelope struct {
@@ -158,6 +160,18 @@ func acceptGameDetails(dir, runID string, p packet, now time.Time) error {
 	at := time.Unix(int64(p.At), 0)
 	if p.At <= 0 {
 		at = now
+	}
+	if env.Upgrade != nil {
+		var answer map[string]json.RawMessage
+		if json.Unmarshal(p.Upgrades, &answer) != nil || len(p.Upgrades) > 32<<10 {
+			return errors.New("invalid upgrade response")
+		}
+		answer["read_at"], _ = json.Marshal(at.UTC().Format(time.RFC3339))
+		body, err := json.Marshal(answer)
+		if err != nil {
+			return err
+		}
+		return writeFileAtomic(base+".out", body)
 	}
 	result := make([]gameEntry, 0, len(env.Refs))
 	for i, ref := range env.Refs {
@@ -320,7 +334,20 @@ func askGameForDetails(dir string, s gameSnapshot, refs []gameRef) ([]gameEntry,
 		req.Character, req.Login = s.Character, s.Login
 		_, req.BagCounts = s.Sections["bags"]
 	}
-	data, err := json.Marshal(detailEnvelope{detailRequest: req, RunID: s.RunID, Expires: time.Now().Add(detailTimeout).UnixMilli()})
+	data, err := askGame(dir, s, req, detailTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var cards []gameEntry
+	if json.Unmarshal(data, &cards) != nil || len(cards) != len(refs) {
+		return nil, errors.New("invalid detail reply from companion")
+	}
+	return cards, nil
+}
+
+// askGame queues one request for the tray to publish and waits for the game's answer.
+func askGame(dir string, s gameSnapshot, req detailRequest, wait time.Duration) ([]byte, error) {
+	data, err := json.Marshal(detailEnvelope{detailRequest: req, RunID: s.RunID, Expires: time.Now().Add(wait).UnixMilli()})
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +357,7 @@ func askGameForDetails(dir string, s gameSnapshot, refs []gameRef) ([]gameEntry,
 	}
 	defer os.Remove(base + ".req")
 	defer os.Remove(base + ".out")
-	timeout := time.NewTimer(detailTimeout)
+	timeout := time.NewTimer(wait)
 	defer timeout.Stop()
 	tick := time.NewTicker(150 * time.Millisecond)
 	defer tick.Stop()
@@ -338,7 +365,7 @@ func askGameForDetails(dir string, s gameSnapshot, refs []gameRef) ([]gameEntry,
 	for {
 		select {
 		case <-timeout.C:
-			return nil, errors.New("the game client did not answer within 42 seconds (offline, UI reloaded or transport busy); use the captured game data or a source for this version of WoW")
+			return nil, fmt.Errorf("the game client did not answer within %d seconds (offline, UI reloaded or transport busy); use the captured game data or a source for this version of WoW", int(wait.Seconds()))
 		case now := <-tick.C:
 			data, err := os.ReadFile(base + ".out")
 			if errors.Is(err, os.ErrNotExist) {
@@ -350,14 +377,7 @@ func askGameForDetails(dir string, s gameSnapshot, refs []gameRef) ([]gameEntry,
 				}
 				continue
 			}
-			if err != nil {
-				return nil, err
-			}
-			var cards []gameEntry
-			if json.Unmarshal(data, &cards) != nil || len(cards) != len(refs) {
-				return nil, errors.New("invalid detail reply from companion")
-			}
-			return cards, nil
+			return data, err
 		}
 	}
 }

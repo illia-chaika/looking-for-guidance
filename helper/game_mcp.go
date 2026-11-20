@@ -45,6 +45,8 @@ func gameTools(dir string) []mcpObject {
 	if auctionReady(dir) {
 		tools = append(tools, tool("get_auction_prices", "Read current asking prices on this character's own auction house: lowest buyout per unit in copper, quantity on sale, cheapest price levels and the cost of buying a quantity, with the snapshot's time. Pass item IDs; pass a carried item's exact link to price that random-suffix variant. Use before advising a purchase or a sale.",
 			auctionToolSchema(), []string{"snapshot_id", "items"}))
+		tools = append(tools, tool("find_auction_upgrades", "Search this character's own auction house for one equipment slot within a budget. The running game drops what the character cannot wear and returns the strongest candidates with their exact stats and asking prices, and the stats of what is worn there now; weigh them for the class. Takes up to a minute.",
+			upgradeToolSchema(), []string{"snapshot_id", "slot", "budget"}))
 	}
 	noteID := mcpObject{"type": "string", "pattern": memoryKey.String(), "description": "Stable semantic key for one agreement, e.g. leveling-plan"}
 	revision := mcpObject{"type": "integer", "minimum": 0, "description": "Current revision returned by get_memory; zero only for a new note"}
@@ -79,6 +81,9 @@ func queryGameSnapshot(dir, tool string, raw json.RawMessage) (mcpObject, error)
 	}
 	if tool == "get_auction_prices" {
 		return queryAuctionPrices(dir, raw)
+	}
+	if tool == "find_auction_upgrades" {
+		return queryAuctionUpgrades(dir, raw)
 	}
 	var args gameToolArgs
 	if err := readToolArgs(raw, &args); err != nil {
@@ -198,7 +203,7 @@ func runGameMCP(in io.Reader, out io.Writer, dir string) error {
 					Name      string          `json:"name"`
 					Arguments json.RawMessage `json:"arguments"`
 				}
-				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
+				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices", "find_auction_upgrades"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
 					fail(-32602, "Unknown tool or invalid parameters")
 					break
 				}

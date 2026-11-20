@@ -57,6 +57,8 @@ type packet struct {
 	Plain       bool        `json:"plain"`
 	RequestID   string      `json:"requestId,omitempty"`
 	Cards       []gameEntry `json:"cards,omitempty"`
+	// The add-on's verdict on auction upgrade candidates, as one JSON object.
+	Upgrades json.RawMessage `json:"upgrades,omitempty"`
 
 	// A journal card asks for researched advice: kind and key name it, facts describe the character.
 	Kind       string          `json:"kind,omitempty"`

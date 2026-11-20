@@ -62,6 +62,8 @@ func (a activityArgs) label(tool string) string {
 		return "Рецепты"
 	case "get_auction_prices":
 		return "Аукцион"
+	case "find_auction_upgrades":
+		return "Подбор на аукционе"
 	case "get_memory":
 		return "Память персонажа"
 	case "upsert_memory":

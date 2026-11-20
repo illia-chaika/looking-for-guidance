@@ -361,3 +361,96 @@ func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
 		t.Fatal("without auction data the prompt says so")
 	}
 }
+
+func TestItemTableKeepsGearOfTheNewestBuildAndChecksDaily(t *testing.T) {
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = append(asked, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/builds":
+			fmt.Fprint(w, `{"wowf":[{"version":"1.60.1.71037"},{"version":"1.60.1.70959"}],"wow":[{"version":"12.1.5.1"}]}`)
+		case "/db2/Item/csv":
+			if r.URL.Query().Get("build") != "1.60.1.71037" {
+				http.NotFound(w, r)
+				return
+			}
+			fmt.Fprint(w, "ID,ClassID,SubclassID,Material,InventoryType\n14158,4,1,7,20\n2589,7,5,7,0\n1811,2,8,1,17\n")
+		}
+	}))
+	t.Cleanup(srv.Close)
+	oldBuilds, oldTable := wagoBuildsURL, wagoTableURL
+	wagoBuildsURL, wagoTableURL = srv.URL+"/api/builds", func(table, build string) string { return srv.URL + "/db2/" + table + "/csv?build=" + build }
+	t.Cleanup(func() { wagoBuildsURL, wagoTableURL = oldBuilds, oldTable })
+
+	dir := t.TempDir()
+	now := time.Now()
+	w := testWatcher(dir, now)
+	if err := w.refreshItems(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	table, err := loadItemTable(dir)
+	if err != nil || table.Build != "1.60.1.71037" || len(table.Items) != 2 || table.Items[14158] != [3]int{4, 1, 20} || table.Items[1811][2] != 17 {
+		t.Fatalf("gear only, of the newest build: %+v %v", table, err)
+	}
+	asked = nil
+	if err := w.refreshItems(context.Background()); err != nil || len(asked) != 0 {
+		t.Fatal("checked again within a day:", asked, err)
+	}
+}
+
+func TestAuctionUpgradesAskTheGameAboutTheSlotsCandidates(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "snapshots")
+	auctions := auctionDir(dir)
+	os.MkdirAll(auctions, 0o700)
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	book := auctionBook{Market: m, Fetched: time.Now().UnixMilli(), Modified: map[string]string{"auctions": "Fri, 20 Nov 2026 17:23:20 GMT"}, Items: map[int]*auctionItem{
+		14158: {Unit: 1399, Variants: []*auctionVariant{{Bonus: []int{12719}, Unit: 1399}, {Bonus: []int{12718}, Tuning: 5246, Unit: 8000},
+			{Bonus: []int{12718}, Unit: 7999}, {Bonus: []int{12720}, Unit: 50000}}},
+		2589: {Unit: 24, Variants: []*auctionVariant{{Unit: 24}}},
+		6096: {Unit: 100, Variants: []*auctionVariant{{Unit: 100}}},
+	}}
+	data, _ := json.Marshal(book)
+	os.WriteFile(filepath.Join(auctions, "eu-114.json"), data, 0o600)
+	items, _ := json.Marshal(itemTable{Build: "1.60.1.71037", Items: map[int][3]int{14158: {4, 1, 20}, 6096: {4, 0, 4}}})
+	os.WriteFile(filepath.Join(auctions, "items.json"), items, 0o600)
+
+	prompt, err := gamePrompt(dir, packet{Type: "reply", Session: "player", RunID: "app", At: float64(time.Now().Unix()), Text: "Что купить на грудь?",
+		ContextText: "Game: WoW Forever 1.60.1.71037 · EU · PvE\nCharacter: level 16 Orc Warlock, Horde · 1g 0s 0c\nDetail lookup: supported"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshotEnvelope.FindStringSubmatch(prompt)[1]
+	tray := newSession("", nil, func() {})
+	tray.runID = "app"
+	tray.pulseDetailBridge(dir, time.Now())
+	type result struct {
+		out mcpObject
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, err := queryGameSnapshot(dir, "find_auction_upgrades", json.RawMessage(`{"snapshot_id":"`+id+`","slot":"chest","budget":10000,"levels_ahead":5}`))
+		done <- result{out, err}
+	}()
+	var req *detailRequest
+	for until := time.Now().Add(3 * time.Second); time.Now().Before(until) && req == nil; time.Sleep(10 * time.Millisecond) {
+		tray.syncDetailRequest(dir, time.Now())
+		req = tray.payload().DetailRequest
+	}
+	if req == nil || req.Upgrade == nil || req.Upgrade.Slot != "chest" || req.Upgrade.Ahead != 5 || len(req.Refs) != 0 {
+		t.Fatalf("upgrade request: %+v", req)
+	}
+	if got, _ := json.Marshal(req.Upgrade.Items); string(got) != `[{"i":14158,"v":[[1399,12719],[7999,12718]]}]` {
+		t.Fatalf("only the slot's variants within budget, merged across level modifiers: %s", got)
+	}
+	var p packet
+	json.Unmarshal([]byte(`{"type":"details","requestId":"`+req.ID+`","session":"player","runId":"app","upgrades":{"items":[{"link":"item:14158::::::::::::1:12719","price":1399,"ilvl":26,"stats":{"SPIRIT":6}}],"worn":[],"level":16,"usable":2}}`), &p)
+	if err := acceptGameDetails(dir, "app", p, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	r := <-done
+	if r.err != nil || r.out["market"] != "EU Normal Horde (house 114)" || r.out["sent_to_game"] != 1 || r.out["read_at"] == nil || len(r.out["items"].([]any)) != 1 {
+		t.Fatalf("the game's verdict comes back with the market: %+v %v", r.out, r.err)
+	}
+}

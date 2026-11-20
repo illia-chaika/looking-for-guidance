@@ -34,6 +34,7 @@ Store.lua
 Transport.lua
 Sync.lua
 GameDetails.lua
+AuctionUpgrades.lua
 Recipes.lua
 Context.lua
 Actions.lua

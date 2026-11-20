@@ -17,7 +17,8 @@ its own conversations and its own memory of decisions ("I am saving for the moun
 
 **Auction prices** (optional, macOS). With your own Battle.net API client in the keychain (see
 [Auction prices](#auction-prices)), the adviser can look up asking prices on your character's auction house before
-it tells you to buy or sell something there.
+it tells you to buy or sell something there, and search your market for an upgrade for one equipment slot within
+a budget.
 
 **Journal.** Eight sections of advice for your character. What the game itself knows is shown at once; what needs
 research is prepared when you press the section's button — or by itself, if you switch research to automatic:
@@ -92,7 +93,8 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 - Conversations, snapshots, memory and cached research stay on your disk.
 - Auction prices, if you set them up, come from Blizzard's Game Data API with your own API client. The companion
   asks for nothing but your market's auction snapshot (region, ruleset and faction pick it); no character data is
-  sent. Prices and their history stay on your disk.
+  sent. For upgrade searches it also downloads the game's item table (item class and equipment slot) from
+  [wago.tools](https://wago.tools) once a day. Prices, their history and the table stay on your disk.
 
 ## Setup
 
