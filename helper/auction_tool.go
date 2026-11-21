@@ -16,6 +16,7 @@ const (
 	maxAuctionItems    = 50
 	auctionShownTiers  = 5
 	auctionStaleAfter  = 6 * time.Hour
+	auctionOfferedFor  = 48 * time.Hour
 	auctionToolMessage = "Asking prices on this character's own auction house from Blizzard's snapshot: lowest buyout per unit in copper and the quantity on sale. They are not sale prices; a non-commodity stack is bought whole."
 )
 
@@ -31,10 +32,16 @@ func auctionToolSchema() mcpObject {
 	}
 }
 
-// auctionReady tells whether this computer downloads auction data at all; without it the tool is not offered.
+// auctionReady tells whether this computer keeps auction data current; without it the tools are not offered. A
+// summary's file time is when the tray last confirmed it, so a client removed from the keychain ends the offer.
 func auctionReady(dir string) bool {
 	books, _ := filepath.Glob(filepath.Join(auctionDir(dir), "*-*.json"))
-	return len(books) > 0
+	for _, book := range books {
+		if info, err := os.Stat(book); err == nil && time.Since(info.ModTime()) < auctionOfferedFor {
+			return true
+		}
+	}
+	return false
 }
 
 type auctionArgs struct {

@@ -221,7 +221,7 @@ Hub.Extend("bags", {
             if found.data.summary then rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = found.data.summary } end
             if next(prices) and found.data.prices_at then
                 rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail",
-                    text = L("Цены аукциона — снимок Blizzard от {1}.", date("%H:%M", found.data.prices_at)) }
+                    text = L("Цены аукциона — снимок Blizzard от {1}.", date(time() - found.data.prices_at > 12 * 3600 and "%d.%m %H:%M" or "%H:%M", found.data.prices_at)) }
             end
             rows[#rows + 1] = { kind = "sources", list = {}, at = found.at }
         elseif key then

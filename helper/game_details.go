@@ -163,7 +163,7 @@ func acceptGameDetails(dir, runID string, p packet, now time.Time) error {
 	}
 	if env.Upgrade != nil {
 		var answer map[string]json.RawMessage
-		if json.Unmarshal(p.Upgrades, &answer) != nil || len(p.Upgrades) > 32<<10 {
+		if json.Unmarshal(p.Upgrades, &answer) != nil || answer == nil || len(p.Upgrades) > 32<<10 {
 			return errors.New("invalid upgrade response")
 		}
 		answer["read_at"], _ = json.Marshal(at.UTC().Format(time.RFC3339))

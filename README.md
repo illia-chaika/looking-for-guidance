@@ -149,11 +149,17 @@ security add-generic-password -U -s lfg-battlenet-id -a battlenet -w
 security add-generic-password -U -s lfg-battlenet-secret -a battlenet -w
 ```
 
-The add-on reports your region, ruleset and faction with each question; the companion then downloads that market
-every 20 minutes when Blizzard has a newer snapshot, keeps a summary in
-`~/Library/Application Support/Looking for Guidance/auctions/` and a daily price history for 90 days, and offers the
-adviser the `get_auction_prices` tool. Normal and PvP markets are known; which auction house serves each Roleplay
-ruleset is not yet, so those characters get no prices. Remove the two keychain items to switch it off.
+The add-on reports your region, ruleset and faction with each question. While it runs, the companion then checks
+every market the game reported in the past week every 20 minutes and downloads it when Blizzard has a newer
+snapshot. It keeps a summary in `~/Library/Application Support/Looking for Guidance/auctions/` and a price history
+for 90 days (about 1 MB a day per market, compressed), and offers the adviser two tools: `get_auction_prices` for
+the price of named items, and `find_auction_upgrades`, which picks the auctions for one equipment slot within a
+budget and lets the running game drop what the character cannot wear and read each candidate's exact stats. For that
+search the companion also keeps the game's item table from wago.tools, checked once a day.
+
+Normal and PvP markets are known. Which auction house serves each Roleplay ruleset is not known yet, and hardcore
+characters trade on a market the API does not list, so those characters get no prices. Remove the two keychain items
+to switch it off: downloads stop, and the tools are no longer offered once the last snapshot is two days old.
 
 ## Known issues
 

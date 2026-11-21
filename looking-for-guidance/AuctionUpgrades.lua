@@ -81,7 +81,8 @@ local function finish(state)
             cold = cold + 1
         else
             local _, _, _, _, required = safe(C_Item.GetItemInfo, "item:" .. item.id)
-            if blocked(item.id) then
+            local _, _, _, equip = safe(C_Item.GetItemInfoInstant, item.id)
+            if blocked(item.id) or (state.slot == "off_hand" and equip == "INVTYPE_WEAPON" and safe(CanDualWield) == false) then
                 unusable = unusable + 1
             elseif type(required) == "number" and required > level + state.ahead then
                 high = high + 1
@@ -142,7 +143,7 @@ function Upgrades.Receive(request)
         if type(item) ~= "table" or not whole(item.i) or item.i < 1 or type(item.v) ~= "table" then return end
         local variants = {}
         for _, v in ipairs(item.v) do
-            if type(v) ~= "table" or not whole(v[1]) then return end
+            if type(v) ~= "table" or type(v[1]) ~= "number" or v[1] < 0 or v[1] % 1 ~= 0 then return end
             local bonus = {}
             for k = 2, #v do
                 if not whole(v[k]) then return end

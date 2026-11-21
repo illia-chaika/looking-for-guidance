@@ -39,7 +39,7 @@ var (
 var upgradeSlots = map[string][]int{
 	"head": {1}, "neck": {2}, "shoulder": {3}, "chest": {5, 20}, "waist": {6}, "legs": {7}, "feet": {8},
 	"wrist": {9}, "hands": {10}, "finger": {11}, "trinket": {12}, "back": {16},
-	"main_hand": {13, 17, 21}, "off_hand": {13, 14, 22, 23}, "ranged": {15, 25, 26},
+	"main_hand": {13, 17, 21}, "off_hand": {13, 14, 22, 23}, "ranged": {15, 25, 26, 28},
 }
 
 // itemTable is the gear of one game build: class, subclass and inventory type by item ID.
@@ -263,6 +263,9 @@ func queryAuctionUpgrades(dir string, raw json.RawMessage) (mcpObject, error) {
 		"note": "Asking prices in copper; stats are the game's own for each variant, compared by you with what the character wears. Items the character cannot use were dropped by the game."}
 	if at := book.modifiedAt(); !at.IsZero() {
 		out["snapshot_at"] = at.UTC().Format(time.RFC3339)
+		if time.Since(at) > auctionStaleAfter {
+			out["stale"] = true
+		}
 	}
 	if len(candidates) == 0 {
 		out["checked"] = 0

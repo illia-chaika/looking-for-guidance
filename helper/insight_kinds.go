@@ -609,7 +609,11 @@ var bagsKind = &insightKind{
 				prices[p.ID] = [2]int64{p.Unit, int64(p.Listed)}
 			}
 			list, _ := json.Marshal(prices)
-			auction = "Auction house on this character's market now, by item id: [lowest asking price per unit in copper, quantity on sale]; an item missing here has no listing: " + string(list)
+			age := "of unknown age"
+			if at := env.Auction.modifiedAt(); !at.IsZero() {
+				age = fmt.Sprintf("taken %s ago", time.Since(at).Round(time.Minute))
+			}
+			auction = "Auction house on this character's market, Blizzard's snapshot " + age + ", by item id: [lowest asking price per unit in copper, quantity on sale]; an item missing here has no listing: " + string(list)
 		}
 		return insightPreamble(req) + strings.Join([]string{
 			"Task: the player's bags are filling up. For each listed item decide what to do with it, for this character.",
@@ -678,7 +682,10 @@ var bagsKind = &insightKind{
 		if env.Auction == nil || json.Unmarshal(data, &answer) != nil || readFacts(req, &facts) != nil {
 			return data
 		}
-		answer.Prices, answer.PricesAt = bagPrices(env.Auction, facts), env.Auction.modifiedAt().Unix()
+		answer.Prices = bagPrices(env.Auction, facts)
+		if at := env.Auction.modifiedAt(); !at.IsZero() {
+			answer.PricesAt = at.Unix()
+		}
 		if out, err := json.Marshal(answer); err == nil {
 			return out
 		}

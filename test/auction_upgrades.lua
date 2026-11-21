@@ -73,4 +73,15 @@ T.GameDetails.Receive({ id = "x", session = "another", upgrade = { slot = "chest
 T.GameDetails.Receive({ id = "y", session = T.Transport.session, upgrade = { slot = "tail", items = {} } })
 wow.Run(9)
 assert(#answers() == 1, "a foreign session or an unknown slot is ignored")
+-- A one-hand weapon for the off hand needs dual wield, which the tooltip does not show.
+catalogue[2207] = { "Jambiya", 11 }
+loaded[2207] = true
+C_Item.GetItemInfoInstant = function(id) return id, "Weapon", "Daggers", id == 2207 and "INVTYPE_WEAPON" or "INVTYPE_SHIELD" end
+CanDualWield = function() return false end
+local offhand = { id = "upgrade-2", session = T.Transport.session, upgrade = { slot = "off_hand", items = { { i = 2207, v = { { 2500 } } } } } }
+wow.payload.detailRequest = offhand
+T.GameDetails.Receive(offhand)
+wow.Run(1)
+local last = answers()[#answers()]
+assert(last.requestId == "upgrade-2" and last.upgrades.unusable == 1 and #last.upgrades.items == 0, "no off-hand dagger without dual wield")
 print("Auction upgrades: wait for cold items, tooltip and level filters, variant stats, ranking and the worn item OK")

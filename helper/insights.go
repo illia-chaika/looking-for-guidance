@@ -28,7 +28,7 @@ const (
 	insightCapLimit   = 200 // the most a setting in the game can allow
 	insightKeep       = 30 * 24 * time.Hour
 	insightParallel   = 2
-	maxInsightFacts   = 8 << 10
+	maxInsightFacts   = 16 << 10 // the Bags card sends up to 30 items with tooltips, links and 20 priced ids
 	maxInsightData    = 8 << 10
 	maxInsightsShown  = 16
 )
@@ -210,6 +210,9 @@ func (e *insightEngine) basis(job *insightJob) string {
 	basis := ""
 	if job.env.Feed != nil {
 		basis = job.env.Feed.Hash
+	}
+	if job.kind.auction && job.env.Auction != nil {
+		basis += "+auction"
 	}
 	if job.kind.notes && len(job.env.Notes) > 0 {
 		sum := sha1.Sum([]byte(strings.Join(job.env.Notes, "\n")))

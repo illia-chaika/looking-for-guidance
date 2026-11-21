@@ -82,10 +82,14 @@ const testCommodities = `{"_links":{"self":{"href":"x"}},"auctions":[
 {"id":11,"item":{"id":2589},"quantity":5,"unit_price":24,"time_left":"SHORT"},
 {"id":12,"item":{"id":2589},"quantity":100,"unit_price":30,"time_left":"LONG"}]}`
 
+// commoditiesModified lets a test give the commodities part a newer snapshot than the rest of the house.
+var commoditiesModified string
+
 func fakeBattleNet(t *testing.T) (requests *[]string) {
 	t.Helper()
 	var seen []string
 	modified := "Fri, 20 Nov 2026 17:23:20 GMT"
+	commoditiesModified = modified
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/token" {
 			if id, secret, ok := r.BasicAuth(); !ok || id != "client" || secret != "secret" {
@@ -100,11 +104,15 @@ func fakeBattleNet(t *testing.T) (requests *[]string) {
 			return
 		}
 		seen = append(seen, r.URL.Path+" "+r.Header.Get("If-Modified-Since"))
-		if r.Header.Get("If-Modified-Since") == modified {
+		current := modified
+		if strings.HasSuffix(r.URL.Path, "/commodities") {
+			current = commoditiesModified
+		}
+		if r.Header.Get("If-Modified-Since") == current {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		w.Header().Set("Last-Modified", modified)
+		w.Header().Set("Last-Modified", current)
 		switch r.URL.Path {
 		case "/data/wow/ruleset/2/auctions/114":
 			fmt.Fprint(w, testHouse)
@@ -174,6 +182,20 @@ func TestAuctionDownloadSummarisesAndSkipsUnchangedSnapshots(t *testing.T) {
 		t.Fatal("both parts are asked with If-Modified-Since:", *requests)
 	}
 
+	// Only the commodities changed: they are read from the conditional answer, the rest once more in full.
+	commoditiesModified = "Fri, 20 Nov 2026 18:23:20 GMT"
+	*requests = nil
+	if changed, err := w.update(context.Background(), m); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	if len(*requests) != 3 || !strings.HasSuffix((*requests)[2], "/auctions/114 ") {
+		t.Fatal("one conditional request per part and one full one for the unchanged part:", *requests)
+	}
+	again, _ := loadAuctionBook(filepath.Join(dir, "eu-114.json"))
+	if again.Items[7469] == nil || again.Items[2589].Listed != 125 || again.Modified["commodities"] != commoditiesModified {
+		t.Fatalf("the summary covers both parts: %+v", again.Modified)
+	}
+
 	w.bn.client = func() (string, string, bool) { return "", "", false }
 	w.bn.token = ""
 	if _, err := w.update(context.Background(), m); err != errNoBattleNetClient {
@@ -241,12 +263,25 @@ func TestAuctionPricesToolAnswersForTheCharactersMarket(t *testing.T) {
 	if _, err := testWatcher(auctionDir(dir), time.Now()).update(context.Background(), m); err != nil {
 		t.Fatal(err)
 	}
-	offered := false
-	for _, tool := range gameTools(dir) {
-		offered = offered || tool["name"] == "get_auction_prices"
+	offered := func() bool {
+		for _, tool := range gameTools(dir) {
+			if tool["name"] == "get_auction_prices" {
+				return true
+			}
+		}
+		return false
 	}
-	if !offered {
+	if !offered() {
 		t.Fatal("the tool is offered once a house is downloaded")
+	}
+	book := filepath.Join(auctionDir(dir), "eu-114.json")
+	old := time.Now().Add(-3 * 24 * time.Hour)
+	os.Chtimes(book, old, old)
+	if offered() {
+		t.Fatal("a summary nobody confirmed for days, as after removing the keychain client, is not offered")
+	}
+	if _, err := testWatcher(auctionDir(dir), time.Now()).update(context.Background(), m); err != nil || !offered() {
+		t.Fatal("confirming an unchanged snapshot offers it again:", err)
 	}
 
 	ask := func(context, args string) (mcpObject, error) {
@@ -306,7 +341,7 @@ func TestAuctionToolShowsInTheActivityLine(t *testing.T) {
 }
 
 func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
-	e, _, prompts := testEngine(t, func(*insightJob, string) (string, error) {
+	e, mu, prompts := testEngine(t, func(*insightJob, string) (string, error) {
 		return `{"summary":"Две вещи на аукцион.","items":[{"item_id":765,"verdict":"auction","reason":"Травники платят 40 медяков."},{"item_id":4562,"verdict":"auction","reason":"Топор берут за 2,5 золотых."}]}`, nil
 	})
 	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
@@ -326,10 +361,36 @@ func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
 	req := insightRequest{Kind: "bags", Key: "WARLOCK:10:2-1", Locale: "ruRU", GameLocale: "enUS", Character: "Player-1-0A",
 		Market: &marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"},
 		Facts:  json.RawMessage(`{"class":"WARLOCK","level":10,"items":[{"id":765,"name":"Silverleaf","q":1,"n":34,"sell":8},{"id":4562,"name":"Severing Axe of the Monkey","q":2,"n":1,"link":"item:4562::::::::10:1490:::1:12721"}],"priced":[{"id":2589}]}`)}
+	runs := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), *prompts...)
+	}
+	// until polls the shown answer, since the engine answers on its own goroutine.
+	until := func(ok func(bagsData) bool) bagsData {
+		t.Helper()
+		var data bagsData
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+			for _, in := range e.view() {
+				if in.Kind == "bags" && in.Key == req.Key && in.State == "ready" && json.Unmarshal(in.Data, &data) == nil && ok(data) {
+					return data
+				}
+			}
+		}
+		t.Fatalf("no matching bags answer: %+v", e.view())
+		return data
+	}
+	herbPrice := func(data bagsData) int64 {
+		for _, p := range data.Prices {
+			if p.ID == 765 {
+				return p.Unit
+			}
+		}
+		return 0
+	}
 	e.request(req)
-	var data bagsData
-	json.Unmarshal(waitInsight(t, e, "bags", "ready").Data, &data)
-	prompt := (*prompts)[0]
+	data := until(func(bagsData) bool { return true })
+	prompt := runs()[0]
 	if !strings.Contains(prompt, `{"4562":[25000,2],"765":[40,120]}`) || strings.Contains(prompt, "priced") || !strings.Contains(prompt, "about 5%") {
 		t.Fatalf("the prompt carries the prices of the variants it judges and nothing ruled out: %s", prompt)
 	}
@@ -341,24 +402,30 @@ func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
 	// A cached answer is shown again with the newest prices, without another run.
 	put(55)
 	e.request(req)
-	time.Sleep(50 * time.Millisecond)
-	json.Unmarshal(waitInsight(t, e, "bags", "ready").Data, &data)
-	herb := 0
-	for _, p := range data.Prices {
-		if p.ID == 765 {
-			herb = int(p.Unit)
-		}
-	}
-	if herb != 55 || len(*prompts) != 1 {
-		t.Fatalf("prices follow the snapshot: %d after %d runs", herb, len(*prompts))
+	until(func(d bagsData) bool { return herbPrice(d) == 55 })
+	if n := len(runs()); n != 1 {
+		t.Fatalf("prices follow the snapshot without another run: %d runs", n)
 	}
 
 	// Without a market the job runs as before.
 	req.Market, req.Key = nil, "WARLOCK:10:2-2"
 	e.request(req)
-	time.Sleep(50 * time.Millisecond)
-	if p := (*prompts)[len(*prompts)-1]; !strings.Contains(p, "no prices available") {
+	until(func(bagsData) bool { return true })
+	if p := runs(); len(p) != 2 || !strings.Contains(p[1], "no prices available") {
 		t.Fatal("without auction data the prompt says so")
+	}
+}
+
+func TestANullUpgradeAnswerIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(detailDir(dir), 0o700)
+	id := strings.Repeat("ab", 16)
+	env, _ := json.Marshal(detailEnvelope{detailRequest: detailRequest{ID: id, Session: "player", Upgrade: &upgradeQuery{Slot: "chest"}},
+		RunID: "app", Expires: time.Now().Add(time.Minute).UnixMilli()})
+	os.WriteFile(filepath.Join(detailDir(dir), id+".req"), env, 0o600)
+	p := packet{Type: "details", RequestID: id, Session: "player", RunID: "app", Upgrades: json.RawMessage("null")}
+	if err := acceptGameDetails(dir, "app", p, time.Now()); err == nil {
+		t.Fatal("a null answer is an error, not a crash")
 	}
 }
 

@@ -114,7 +114,7 @@ payload = CopyTable(payload)
 payload.rev = payload.rev + 1
 local data = payload.insights[1].data
 data.items[2] = { item_id = 2449, verdict = "auction", reason = "Herbalists pay well." }
-data.prices, data.prices_at = { { id = 2449, unit = 40, listed = 120 }, { id = 4562, unit = 25000, listed = 2 } }, 1794600000
+data.prices, data.prices_at = { { id = 2449, unit = 40, listed = 120 }, { id = 4562, unit = 25000, listed = 2 } }, time() - 600
 wow.payload = payload
 T.Sync.Check()
 c = card()
@@ -125,7 +125,16 @@ assert(axe.value == "0g 3s 10c" and axe.text == "Two-Handed Axes On the auction 
 assert(row(c, "Linen Cloth ×26").text == "Cheap cloth.", "an item nobody sells keeps its reason alone")
 local stamp
 for _, r in ipairs(c.rows) do if r.kind == "text" and r.text:find("Blizzard", 1, true) then stamp = r.text end end
-assert(stamp == "Auction prices: Blizzard's snapshot of " .. date("%H:%M", 1794600000) .. ".", stamp)
+local fresh = data.prices_at
+assert(stamp == "Auction prices: Blizzard's snapshot of " .. date("%H:%M", fresh) .. ".", "a fresh snapshot shows its time: " .. stamp)
+payload = CopyTable(payload)
+payload.rev = payload.rev + 1
+payload.insights[1].data.prices_at = time() - 2 * 86400
+wow.payload = payload
+T.Sync.Check()
+stamp = nil
+for _, r in ipairs(card().rows) do if r.kind == "text" and r.text:find("Blizzard", 1, true) then stamp = r.text end end
+assert(stamp == "Auction prices: Blizzard's snapshot of " .. date("%d.%m %H:%M", time() - 2 * 86400) .. ".", "an old one its date too: " .. stamp)
 
 -- A remembered wish wins over the advice to sell.
 T.Store.memory = { character = "Player-1-121A", login = "login", notes = { { scope = "character", topic = "bags", text = "Keep my Linen Cloth for bandages." } } }

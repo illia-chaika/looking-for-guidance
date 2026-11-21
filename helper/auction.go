@@ -344,34 +344,41 @@ func (w *auctionWatcher) update(ctx context.Context, m auctionMarket) (bool, err
 	old, _ := loadAuctionBook(path)
 	base := fmt.Sprintf("/data/wow/ruleset/%d/auctions/%d", rulesetIDs[m.Ruleset], m.House)
 	parts := [][2]string{{"auctions", base}, {"commodities", base + "/commodities"}}
+	build := newBookBuilder()
+	book := &auctionBook{Market: m, Modified: map[string]string{}}
+	// read decodes one part unless Blizzard answers that it has not changed since the given time.
+	read := func(part [2]string, since string) (bool, error) {
+		resp, err := w.bn.get(ctx, m.Region, part[1], since)
+		if err != nil || resp == nil {
+			return false, err
+		}
+		defer resp.Body.Close()
+		book.Modified[part[0]] = resp.Header.Get("Last-Modified")
+		if err := decodeAuctions(io.LimitReader(resp.Body, auctionMaxBody), build.add); err != nil {
+			return false, fmt.Errorf("%s: %w", part[1], err)
+		}
+		return true, nil
+	}
+	got := map[string]bool{}
 	if old != nil {
-		changed := false
 		for _, part := range parts {
-			resp, err := w.bn.get(ctx, m.Region, part[1], old.Modified[part[0]])
+			fresh, err := read(part, old.Modified[part[0]])
 			if err != nil {
 				return false, err
 			}
-			if resp != nil {
-				resp.Body.Close()
-				changed = true
-			}
+			got[part[0]] = fresh
 		}
-		if !changed {
-			return false, nil
+		if !got["auctions"] && !got["commodities"] {
+			now := w.now()
+			return false, os.Chtimes(path, now, now) // confirmed current
 		}
 	}
-	build := newBookBuilder()
-	book := &auctionBook{Market: m, Modified: map[string]string{}}
+	// A summary covers both parts, so the one that did not change is read again in full.
 	for _, part := range parts {
-		resp, err := w.bn.get(ctx, m.Region, part[1], "")
-		if err != nil {
-			return false, err
-		}
-		err = decodeAuctions(io.LimitReader(resp.Body, auctionMaxBody), build.add)
-		book.Modified[part[0]] = resp.Header.Get("Last-Modified")
-		resp.Body.Close()
-		if err != nil {
-			return false, fmt.Errorf("%s: %w", part[1], err)
+		if !got[part[0]] {
+			if _, err := read(part, ""); err != nil {
+				return false, err
+			}
 		}
 	}
 	book.Items, book.Fetched = build.items(), w.now().UnixMilli()

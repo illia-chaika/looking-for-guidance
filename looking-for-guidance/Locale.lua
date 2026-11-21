@@ -74,7 +74,7 @@ end
 -- The bundled fonts draw the no-break space but none of the typographic ones (thin, narrow no-break, figure…)
 -- that an adviser puts into numbers such as "26 361"; those showed as boxes. Zero-width spaces are dropped.
 function T.PlainSpaces(text)
-    return (text:gsub("\226\128[\130-\138\175]", "\194\160"):gsub("\226\129\159", "\194\160"):gsub("\226\128\139", ""))
+    return (text:gsub("\226\128[\128-\138\175]", "\194\160"):gsub("\226\129\159", "\194\160"):gsub("\226\128\139", ""))
 end
 
 function T.SetContent(label, value)

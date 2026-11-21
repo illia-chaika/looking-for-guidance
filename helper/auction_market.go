@@ -25,8 +25,9 @@ type marketFacts struct {
 }
 
 // Blizzard lists five houses per faction. The n-th houses of the two factions and the neutral one form a market:
-// the first is PvP and the second Normal (matched against prices scanned in the game, 2026-11-13); the third is
-// empty, and which of the last two is Roleplay and which Roleplay PvP is not known yet.
+// the second is Normal (matched against prices players scanned in the game, 2026-11-13) and the first PvP (by
+// elimination: Korea has only those two rulesets and only those two groups hold data); the third is empty, and
+// which of the last two is Roleplay and which Roleplay PvP is not known yet.
 var factionHouses = map[string][5]int{
 	"Alliance": {110, 111, 112, 119, 123},
 	"Horde":    {113, 114, 115, 120, 124},
