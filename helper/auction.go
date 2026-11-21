@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -21,7 +22,8 @@ import (
 
 // The auction house of the player's market, from Blizzard's Game Data API. The tray downloads the houses the game
 // reported recently and keeps a short summary per item; the game data server reads it for get_auction_prices.
-// Nothing happens without the player's own Battle.net API client in the credential store (battleNetClient).
+// Snapshots come through the player's own Battle.net API client when one is in the credential store
+// (battleNetClient), otherwise from the project's mirror, which serves Blizzard's snapshots unchanged.
 
 const (
 	battleNetAccount       = "battlenet"
@@ -30,10 +32,12 @@ const (
 
 	auctionEvery       = 20 * time.Minute
 	auctionMarketAge   = 7 * 24 * time.Hour // markets the game reported this recently are kept fresh
-	auctionHistoryDays = 90
+	auctionHistoryDays = 30
 	auctionTiers       = 10       // cheapest price levels kept per variant
 	auctionContentTune = 28       // the API's modifier type for ContentTuningID: where the item dropped decides its level
 	auctionMaxBody     = 64 << 20 // one house was 27 MB of JSON in November 2026
+
+	defaultAuctionMirror = "https://api.lfguidance.com"
 )
 
 var (
@@ -46,7 +50,23 @@ var (
 	// auctionWake asks the tray's watcher to look now, when the game reports a market it has not downloaded yet.
 	auctionWake = make(chan struct{}, 1)
 	marketsMu   sync.Mutex
+
+	auctionMirrorURL = func() string { return mirrorAddress(loadSettings()) }
+	mirrorPath       = regexp.MustCompile(`^/data/wow/ruleset/\d+/auctions/(\d+)(/commodities)?$`)
 )
+
+// mirrorAddress is auctionMirror from settings.json when it names an https address, nothing when it says "off" or
+// names anything else, and the project's own mirror when it is absent.
+func mirrorAddress(s settings) string {
+	switch v := strings.TrimSpace(s.AuctionMirror); v {
+	case "":
+		return defaultAuctionMirror
+	case "off":
+		return ""
+	default:
+		return strings.TrimSuffix(safeWebURL(v), "/")
+	}
+}
 
 func auctionDir(snapshots string) string { return filepath.Join(filepath.Dir(snapshots), "auctions") }
 
@@ -332,19 +352,60 @@ func (b *battleNet) get(ctx context.Context, region, path, since string) (*http.
 	return nil, fmt.Errorf("%s answered %s", path, resp.Status)
 }
 
+// auctionSource gives one snapshot part as Blizzard sent it, or nil when it has not changed since the given time.
+type auctionSource interface {
+	get(ctx context.Context, region, path, since string) (*http.Response, error)
+}
+
+// auctionMirror is the project's mirror of every Forever auction house: the same JSON and Last-Modified as Blizzard,
+// without a token.
+type auctionMirror struct {
+	base string
+	http *http.Client
+}
+
+func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*http.Response, error) {
+	part := mirrorPath.FindStringSubmatch(path)
+	if part == nil {
+		return nil, fmt.Errorf("the auction mirror has no %s", path)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.base+"/v1/auctions/"+region+"/"+part[1]+part[2], nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "looking-for-guidance/"+version)
+	if since != "" {
+		req.Header.Set("If-Modified-Since", since)
+	}
+	resp, err := m.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case resp.StatusCode == http.StatusOK && (since == "" || resp.Header.Get("Last-Modified") != since):
+		return resp, nil
+	case resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotModified:
+		resp.Body.Close()
+		return nil, nil
+	}
+	resp.Body.Close()
+	return nil, fmt.Errorf("the auction mirror answered %s for %s", resp.Status, req.URL.Path)
+}
+
 type auctionWatcher struct {
-	dir string // <settings folder>/auctions
-	bn  *battleNet
-	now func() time.Time
+	dir    string // <settings folder>/auctions
+	bn     *battleNet
+	mirror func() string // the mirror's address, or "" when it is off
+	now    func() time.Time
 }
 
 func newAuctionWatcher(dir string) *auctionWatcher {
-	return &auctionWatcher{dir: dir, now: time.Now,
+	return &auctionWatcher{dir: dir, now: time.Now, mirror: auctionMirrorURL,
 		bn: &battleNet{client: battleNetClient, http: &http.Client{Timeout: 3 * time.Minute}, now: time.Now}}
 }
 
-// update downloads one house when Blizzard has a newer snapshot of it, and reports whether it did.
-func (w *auctionWatcher) update(ctx context.Context, m auctionMarket) (bool, error) {
+// update downloads one house when the source has a newer snapshot of it, and reports whether it did.
+func (w *auctionWatcher) update(ctx context.Context, src auctionSource, m auctionMarket) (bool, error) {
 	path := filepath.Join(w.dir, m.key()+".json")
 	old, _ := loadAuctionBook(path)
 	base := fmt.Sprintf("/data/wow/ruleset/%d/auctions/%d", rulesetIDs[m.Ruleset], m.House)
@@ -353,7 +414,7 @@ func (w *auctionWatcher) update(ctx context.Context, m auctionMarket) (bool, err
 	book := &auctionBook{Market: m, Modified: map[string]string{}}
 	// read decodes one part unless Blizzard answers that it has not changed since the given time.
 	read := func(part [2]string, since string) (bool, error) {
-		resp, err := w.bn.get(ctx, m.Region, part[1], since)
+		resp, err := src.get(ctx, m.Region, part[1], since)
 		if err != nil || resp == nil {
 			return false, err
 		}
@@ -435,6 +496,7 @@ func (w *auctionWatcher) remember(book *auctionBook) error {
 	if err != nil {
 		return err
 	}
+	// Blizzard's API terms keep data no longer than 30 days; derived prices are kept no longer either.
 	cutoff := now.AddDate(0, 0, -auctionHistoryDays).Format(time.DateOnly)
 	for _, e := range entries {
 		name := e.Name()
@@ -568,13 +630,18 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 		w.bn.token = ""
 	}
 	status := auctionStatus{Failing: map[string]string{}}
+	var src auctionSource = w.bn
 	if !ok {
-		w.saveStatus(status)
-		return
+		base := w.mirror()
+		if base == "" {
+			w.saveStatus(status)
+			return
+		}
+		src = &auctionMirror{base: base, http: w.bn.http}
 	}
 	markets := recentMarkets(w.dir, w.now())
 	for _, m := range markets {
-		changed, err := w.update(ctx, m)
+		changed, err := w.update(ctx, src, m)
 		switch {
 		case errors.Is(err, errNoBattleNetClient):
 			w.saveStatus(auctionStatus{})

@@ -24,6 +24,8 @@ type settings struct {
 	Provider string `json:"provider,omitempty"`
 	// The language of the companion's own menu, such as "ru" or "de", when it should differ from the system's.
 	Language string `json:"language,omitempty"`
+	// The auction mirror used without a Battle.net client of one's own: another https address, or "off".
+	AuctionMirror string `json:"auctionMirror,omitempty"`
 }
 
 func configDir() string {

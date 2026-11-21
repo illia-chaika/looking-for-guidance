@@ -11,8 +11,8 @@ local SECTIONS = {
 }
 -- Why the helper sent no auction prices, by its code.
 local PRICES_OFF = {
-    setup = "Цены аукциона не настроены: выбери «Цены аукциона» в меню Looking for Guidance.",
-    refused = "Blizzard не принимает сохранённый API-клиент Battle.net: выключи и снова включи «Цены аукциона» в меню Looking for Guidance.",
+    setup = "Цены аукциона выключены: в settings.json отключено зеркало проекта, а своего API-клиента Battle.net нет.",
+    refused = "Blizzard не принимает сохранённый API-клиент Battle.net: убери его пунктом «Свой API-клиент Battle.net» в меню Looking for Guidance, и цены придут с зеркала проекта.",
     market = "Blizzard не публикует цены аукциона для рынка этого персонажа.",
     pending = "Цены аукциона ещё загружаются.",
 }

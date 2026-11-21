@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// The tray's Auction prices item stores the player's own Battle.net API client after Blizzard accepts it, or removes
-// it. Either way the watcher looks at once.
+// The tray's Own Battle.net API client item stores the player's own client after Blizzard accepts it, or removes it
+// and goes back to the mirror. Either way the watcher looks at once.
 
 const battleNetClientsURL = "https://develop.battle.net/access/clients"
 
@@ -44,7 +44,7 @@ func (a *app) toggleAuctions() {
 
 func (a *app) setUpAuctions() {
 	openURL(battleNetClientsURL)
-	id, ok := askText(tr("Auction prices need your own free Battle.net API client. Create one on the page that has just opened, then paste its Client ID here."), false)
+	id, ok := askText(tr("Auction prices already come from the project's mirror. To ask Blizzard with your own free Battle.net API client instead, create one on the page that has just opened, then paste its Client ID here."), false)
 	if !ok || strings.TrimSpace(id) == "" {
 		return
 	}
@@ -57,7 +57,7 @@ func (a *app) setUpAuctions() {
 	defer cancel()
 	if err := checkBattleNetClient(ctx, id, secret); errors.Is(err, errBattleNetRefused) {
 		logf("Auction prices: the client was not stored: %v", err)
-		tell(tr("Battle.net did not accept this client ID and secret. Check both on develop.battle.net and choose Auction prices again."))
+		tell(tr("Battle.net did not accept this client ID and secret. Check both on develop.battle.net and choose Own Battle.net API client again."))
 		return
 	} else if err != nil {
 		logf("Auction prices: the client was not stored: %v", err)
@@ -70,11 +70,11 @@ func (a *app) setUpAuctions() {
 		return
 	}
 	logf("Auction prices: Battle.net API client stored")
-	tell(tr("Auction prices are on. Ask anything in the game, and the companion downloads your auction house within a few minutes."))
+	tell(tr("Your own Battle.net API client is stored. From now on the companion asks Blizzard for your auction house itself."))
 }
 
 func (a *app) turnOffAuctions() {
-	if !confirm(tr("Turn off auction prices? The companion removes your Battle.net API client from this computer; prices already downloaded stay.")) {
+	if !confirm(tr("Stop using your own Battle.net API client? The companion removes it from this computer and reads auction prices from the project's mirror again.")) {
 		return
 	}
 	if err := forgetBattleNetClient(); err != nil {

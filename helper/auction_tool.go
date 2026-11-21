@@ -45,13 +45,13 @@ func (u *auctionUnavailable) Error() string {
 	return string(data)
 }
 
-const auctionSetUp = "In the Looking for Guidance menu (its icon in the menu bar on macOS, in the notification area on Windows) choose Auction prices. It opens develop.battle.net, where the player creates a free API client, and asks for that client's ID and secret. Prices follow a few minutes after the next question in the game."
+const auctionSetUp = "Remove \"auctionMirror\": \"off\" from the companion's settings.json to read prices from the project's mirror again. Or, in the Looking for Guidance menu (its icon in the menu bar on macOS, in the notification area on Windows), choose Own Battle.net API client: it opens develop.battle.net, where the player creates a free API client, and asks for that client's ID and secret. Prices follow a few minutes after the next question in the game."
 
 // auctionProblem tells why the market has no prices to read, or nil when its summary is there. dir is any folder
 // beside the auctions one, such as the snapshots or the journal's.
 func auctionProblem(dir string, m auctionMarket, marketErr error) *auctionUnavailable {
-	if _, _, ok := battleNetClient(); !ok {
-		return &auctionUnavailable{"setup", "Auction prices are not set up: the companion has no Battle.net API client.", auctionSetUp}
+	if _, _, ok := battleNetClient(); !ok && auctionMirrorURL() == "" {
+		return &auctionUnavailable{"setup", "Auction prices are not set up: the companion has no Battle.net API client and the auction mirror is off.", auctionSetUp}
 	}
 	if marketErr != nil {
 		return &auctionUnavailable{"market", "There are no auction prices for this: " + marketErr.Error() + ".",
@@ -60,7 +60,7 @@ func auctionProblem(dir string, m auctionMarket, marketErr error) *auctionUnavai
 	status := loadAuctionStatus(auctionDir(dir))
 	if status.Refused != "" {
 		return &auctionUnavailable{"refused", status.Refused + ": the stored client ID or secret no longer works.",
-			"In the Looking for Guidance menu choose Auction prices to turn them off, then choose it again and enter the ID and secret of a working client from develop.battle.net. A deleted client or a reset secret stops working."}
+			"In the Looking for Guidance menu choose Own Battle.net API client to remove the stored client: prices then come from the project's mirror. To keep a client of one's own, choose it again and enter the ID and secret of a working client from develop.battle.net. A deleted client or a reset secret stops working."}
 	}
 	if _, err := os.Stat(filepath.Join(auctionDir(dir), m.key()+".json")); err == nil {
 		return nil

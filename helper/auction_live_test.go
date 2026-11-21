@@ -23,7 +23,7 @@ func TestLiveAuction(t *testing.T) {
 	}
 	w := newAuctionWatcher(t.TempDir())
 	start := time.Now()
-	if changed, err := w.update(context.Background(), m); err != nil || !changed {
+	if changed, err := w.update(context.Background(), w.bn, m); err != nil || !changed {
 		t.Fatal(changed, err)
 	}
 	path := filepath.Join(w.dir, m.key()+".json")
@@ -41,7 +41,7 @@ func TestLiveAuction(t *testing.T) {
 	if len(book.Items) < 500 || time.Since(book.modifiedAt()) > 3*time.Hour {
 		t.Fatal("expected a busy and fresh house")
 	}
-	if changed, err := w.update(context.Background(), m); err != nil || changed {
+	if changed, err := w.update(context.Background(), w.bn, m); err != nil || changed {
 		t.Fatal("the same snapshot is not downloaded twice:", changed, err)
 	}
 	if err := w.refreshItems(context.Background()); err != nil {

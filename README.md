@@ -21,10 +21,10 @@ before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
 searches current sources before answering. Shift-click items, spells and quests into the message. Each character has
 its own conversations and its own memory of decisions ("I am saving for the mount", "keep the linen").
 
-**Auction prices** (optional). With your own free Battle.net API client, set up from the companion's menu (see
-[Auction prices](#auction-prices)), the adviser can look up asking prices on your character's auction house before
-it tells you to buy or sell something there, and search your market for an upgrade for one equipment slot within
-a budget.
+**Auction prices.** The adviser can look up asking prices on your character's auction house before it tells you to
+buy or sell something there, and search your market for an upgrade for one equipment slot within a budget. Nothing
+to set up: the companion reads Blizzard's hourly snapshots from the project's mirror, or through your own Battle.net
+API client if you prefer (see [Auction prices](#auction-prices)).
 
 **Journal.** Eight sections of advice for your character. What the game itself knows is shown at once; what needs
 research is prepared when you press the section's button — or by itself, if you switch research to automatic:
@@ -79,8 +79,7 @@ flowchart LR
   or [Claude Code](https://code.claude.com/docs/en/setup). You choose one in the companion's menu and everything
   goes to it — chats and journal research alike. Either way the agent is confined to the adviser's role: it reads
   character data through a local MCP server, searches the web and reads pages, and can do nothing else. Nothing but
-  the question and the tool results it asks for leaves the computer — apart from the auction download below, when
-  you set it up.
+  the question and the tool results it asks for leaves the computer — apart from the auction download below.
 - **Journal research** runs as hidden one-shot jobs with a fixed output schema. The companion validates every answer
   in Go — quotes must appear in the fetched text, IDs must be ones the game sent, links must be `https` — and caches
   it on disk.
@@ -90,7 +89,7 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 ## Cost and privacy
 
 - Advice uses **your own** subscription: a Claude plan through Claude Code, or a ChatGPT plan through the Codex CLI.
-  One of them is enough. There is no server of ours and no account to create.
+  One of them is enough. There is no account to create; the project's only server is the auction mirror below.
 - What is sent to the model: your question, and the sections of the character snapshot the agent requests. You
   choose the allowed sections in *Settings → Character data*.
 - Journal research spends the same allowance, so by default it runs **only when you press a button** in a section.
@@ -101,9 +100,13 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 - The chat footer's tooltip shows which adviser answers and how much of its allowance is left, when the provider
   reports that: Codex through its account limits, Claude Code after each turn.
 - Conversations, snapshots, memory and cached research stay on your disk.
-- Auction prices, if you set them up, come from Blizzard's Game Data API with your own API client. The companion
-  asks for nothing but your market's auction snapshot (region, ruleset and faction pick it); no character data is
-  sent. For upgrade searches it also downloads the game's item table (item class and equipment slot) from
+- Auction prices come from Blizzard's Game Data API. By default the companion downloads your market's snapshot from
+  the project's mirror at `api.lfguidance.com`, which fetches every Forever auction house from Blizzard and serves
+  the snapshots unchanged. The mirror runs on Cloudflare, which sees your IP address and the auction house you ask
+  for; the mirror's own code stores nothing about requests. With your own Battle.net API client the companion asks
+  Blizzard directly instead, and `"auctionMirror": "off"` in `settings.json` stops the mirror altogether. Either way
+  the companion asks for nothing but your market's snapshot (region, ruleset and faction pick it); no character
+  data is sent. For upgrade searches it also downloads the game's item table (item class and equipment slot) from
   [wago.tools](https://wago.tools) once a day. Prices, their history and the table stay on your disk.
 
 ## Setup
@@ -160,23 +163,29 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 | `language` | Language of the companion's menu, such as `"ru"` or `"de"`; by default it follows the system |
 | `gameDir` | The agent's working folder; chats are tied to it, so it only matters when moving an existing setup |
 | `hotfixUrl` | Address of Blizzard's hotfix article, if it moves |
+| `auctionMirror` | Address of the auction mirror used without your own Battle.net client, or `"off"` |
 
 ### Auction prices
 
-Blizzard serves WoW: Forever's auction houses through its Game Data API, about once an hour. To read them the
-companion needs your own API client, which is free. Setting it up is the same on macOS and Windows (where, like the
-rest of the Windows build, it has not been tried yet):
+Blizzard serves WoW: Forever's auction houses through its Game Data API, about once an hour. Reading the API takes
+an API client, so the project runs a mirror on Cloudflare at `api.lfguidance.com` with a client of its own: every few
+minutes it asks Blizzard about every Forever auction house and keeps the newest snapshot of each, unchanged. Without
+a client of yours the companion reads from the mirror, and there is nothing to set up.
 
-1. Choose *Auction prices* in the companion's menu (its menu bar icon on macOS, its icon in the notification area on
-   Windows). Your browser opens <https://develop.battle.net/access/clients>: sign in with your Battle.net account and
-   create a client there.
+To ask Blizzard yourself instead, use your own free API client; the companion then never contacts the mirror.
+Setting it up is the same on macOS and Windows (where, like the rest of the Windows build, it has not been tried
+yet):
+
+1. Choose *Own Battle.net API client* in the companion's menu (its menu bar icon on macOS, its icon in the
+   notification area on Windows). Your browser opens <https://develop.battle.net/access/clients>: sign in with your
+   Battle.net account and create a client there.
 2. The companion asks for the client's ID, then for its secret, which is typed as dots. It asks Blizzard whether the
    two work and stores them only if they do.
 3. Ask anything in the game. The add-on reports your region, ruleset and faction with each question, and the
    companion downloads that auction house within a few minutes.
 
-A check mark next to *Auction prices* means a client is stored. The ID and secret are kept in the system's credential
-store, never in a file:
+A check mark next to *Own Battle.net API client* means a client is stored. The ID and secret are kept in the
+system's credential store, never in a file:
 
 - macOS: the login keychain, items `lfg-battlenet-id` and `lfg-battlenet-secret` with the account `battlenet`. Items
   made with the `security` commands that earlier versions asked for keep working.
@@ -184,9 +193,10 @@ store, never in a file:
   `lfg-battlenet-secret:battlenet`.
 
 While it runs, the companion checks every market the game reported in the past week every 20 minutes and downloads
-it when Blizzard has a newer snapshot. It keeps a summary in the `auctions` folder beside `settings.json`
+it when there is a newer snapshot. It keeps a summary in the `auctions` folder beside `settings.json`
 (`~/Library/Application Support/Looking for Guidance/auctions/` on macOS, `%AppData%\Looking for Guidance\auctions\`
-on Windows) and a price history for 90 days (about 1 MB a day per market, compressed), and offers the adviser two
+on Windows) and a price history for 30 days, the longest Blizzard's API terms allow (about 1 MB a day per market,
+compressed), and offers the adviser two
 tools: `get_auction_prices` for the price of named items, and `find_auction_upgrades`, which picks the auctions for one
 equipment slot within a budget and lets the running game drop what the character cannot wear and read each
 candidate's exact stats. For that search the companion also keeps the game's item table from wago.tools, checked once
@@ -198,16 +208,18 @@ market, in `helper.log` beside `settings.json`; the journal's Bags section then 
 Without prices nothing breaks. The adviser always has both tools, and they answer with the reason and what to do,
 which the adviser passes on in your language; the Bags section says it in one line. The reasons are:
 
-- No client is set up: choose *Auction prices*.
-- Blizzard no longer accepts the stored client, as after deleting it or resetting its secret: choose *Auction prices*
-  twice, to turn it off and to set it up again with a working client.
+- No client is set up and the mirror is off (`"auctionMirror": "off"`): remove that setting, or choose *Own
+  Battle.net API client*.
+- Blizzard no longer accepts the stored client, as after deleting it or resetting its secret: choose *Own Battle.net
+  API client* to remove it and go back to the mirror, and again to store a working client.
 - The character's market has no data in the API. Normal and PvP markets are known; which auction house serves each
   Roleplay ruleset is not known yet, and hardcore characters trade on a market the API does not list.
-- The first download is still running, or failing; the companion tries again every 20 minutes and `helper.log` says
-  why.
+- The first download is still running, or failing, as when the mirror or Blizzard cannot be reached; the companion
+  tries again every 20 minutes and `helper.log` says why.
 
-To switch it off, choose *Auction prices* again and confirm: the companion removes the client from the credential
-store and stops downloading. Prices already downloaded stay on your disk.
+To stop using your own client, choose *Own Battle.net API client* again and confirm: the companion removes it from the
+credential store and goes back to the mirror. With `"auctionMirror": "off"` as well, nothing is downloaded. Prices
+already downloaded stay on your disk.
 
 ## Known issues
 
@@ -258,10 +270,10 @@ Three checks talk to the real world and are off by default:
 - `FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper` runs one journal research job against the real
   agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too). It spends allowance.
   Add `FOREVER_LIVE_AGENT=claude` to run it through Claude Code, and `FOREVER_MARKET="EU PvE Horde"` to give the
-  `bags` job a real auction house first (needs the Battle.net client stored through *Auction prices*).
+  `bags` job a real auction house first (needs the Battle.net client stored through *Own Battle.net API client*).
 - `FOREVER_AUCTION="EU PvE Horde" go test -run TestLiveAuction -v ./helper` downloads that auction house with the
-  Battle.net client stored through *Auction prices* and checks the summary. The other tests keep their client in
-  memory and never touch the credential store.
+  Battle.net client stored through *Own Battle.net API client* and checks the summary. The other tests keep their
+  client in memory and never touch the credential store.
 - `FOREVER_FRAMES=/Volumes/GameDisk go test -run TestFrameSoak -v ./helper` writes `AddOns.txt` to a temporary
   folder on that disk the way the game does and reads it with the companion's own watcher.
 

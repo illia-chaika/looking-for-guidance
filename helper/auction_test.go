@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -132,7 +133,7 @@ func fakeBattleNet(t *testing.T) (requests *[]string) {
 
 func testWatcher(dir string, now time.Time) *auctionWatcher {
 	clock := func() time.Time { return now }
-	return &auctionWatcher{dir: dir, now: clock, bn: &battleNet{http: http.DefaultClient, now: clock,
+	return &auctionWatcher{dir: dir, now: clock, mirror: auctionMirrorURL, bn: &battleNet{http: http.DefaultClient, now: clock,
 		client: func() (string, string, bool) { return "client", "secret", true }}}
 }
 
@@ -145,7 +146,7 @@ func TestAuctionDownloadSummarisesAndSkipsUnchangedSnapshots(t *testing.T) {
 	w := testWatcher(dir, now)
 	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
 
-	if changed, err := w.update(context.Background(), m); err != nil || !changed {
+	if changed, err := w.update(context.Background(), w.bn, m); err != nil || !changed {
 		t.Fatal(changed, err)
 	}
 	book, err := loadAuctionBook(filepath.Join(dir, "eu-114.json"))
@@ -176,7 +177,7 @@ func TestAuctionDownloadSummarisesAndSkipsUnchangedSnapshots(t *testing.T) {
 	}
 
 	*requests = nil
-	if changed, err := w.update(context.Background(), m); err != nil || changed {
+	if changed, err := w.update(context.Background(), w.bn, m); err != nil || changed {
 		t.Fatal("an unchanged house is not downloaded again:", changed, err)
 	}
 	if len(*requests) != 2 || !strings.HasSuffix((*requests)[0], "GMT") {
@@ -186,7 +187,7 @@ func TestAuctionDownloadSummarisesAndSkipsUnchangedSnapshots(t *testing.T) {
 	// Only the commodities changed: they are read from the conditional answer, the rest once more in full.
 	commoditiesModified = "Fri, 20 Nov 2026 18:23:20 GMT"
 	*requests = nil
-	if changed, err := w.update(context.Background(), m); err != nil || !changed {
+	if changed, err := w.update(context.Background(), w.bn, m); err != nil || !changed {
 		t.Fatal(changed, err)
 	}
 	if len(*requests) != 3 || !strings.HasSuffix((*requests)[2], "/auctions/114 ") {
@@ -199,7 +200,7 @@ func TestAuctionDownloadSummarisesAndSkipsUnchangedSnapshots(t *testing.T) {
 
 	w.bn.client = func() (string, string, bool) { return "", "", false }
 	w.bn.token = ""
-	if _, err := w.update(context.Background(), m); err != errNoBattleNetClient {
+	if _, err := w.update(context.Background(), w.bn, m); err != errNoBattleNetClient {
 		t.Fatal("without a client nothing is fetched:", err)
 	}
 }
@@ -210,6 +211,8 @@ func TestAuctionHistoryCompressesFinishedDaysAndDropsOldOnes(t *testing.T) {
 	os.MkdirAll(folder, 0o700)
 	os.WriteFile(filepath.Join(folder, "2026-11-19.jsonl"), []byte("{}\n"), 0o600)
 	os.WriteFile(filepath.Join(folder, "2026-07-01.jsonl.gz"), []byte("old"), 0o600)
+	os.WriteFile(filepath.Join(folder, "2026-10-20.jsonl.gz"), []byte("31 days"), 0o600)
+	os.WriteFile(filepath.Join(folder, "2026-10-21.jsonl.gz"), []byte("30 days"), 0o600)
 	w := testWatcher(dir, time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC))
 	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
 	if err := w.remember(&auctionBook{Market: m, Fetched: 1, Items: map[int]*auctionItem{2589: {Unit: 24, Listed: 5}}}); err != nil {
@@ -220,7 +223,7 @@ func TestAuctionHistoryCompressesFinishedDaysAndDropsOldOnes(t *testing.T) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	if strings.Join(names, " ") != "2026-11-19.jsonl.gz 2026-11-20.jsonl" {
+	if strings.Join(names, " ") != "2026-10-21.jsonl.gz 2026-11-19.jsonl.gz 2026-11-20.jsonl" {
 		t.Fatal(names)
 	}
 }
@@ -291,8 +294,8 @@ func TestAuctionPricesToolAnswersForTheCharactersMarket(t *testing.T) {
 
 	_, err := ask(horde, linen)
 	unavailable(t, err, "setup")
-	if !strings.Contains(err.Error(), "Auction prices") || !strings.Contains(err.Error(), "develop.battle.net") {
-		t.Fatal("without a client the answer names the menu item and the page:", err)
+	if !strings.Contains(err.Error(), "auctionMirror") || !strings.Contains(err.Error(), "Own Battle.net API client") || !strings.Contains(err.Error(), "develop.battle.net") {
+		t.Fatal("without a client or the mirror the answer names the setting, the menu item and the page:", err)
 	}
 	useBattleNetClient(t)
 	_, err = ask(horde, linen)
@@ -309,7 +312,7 @@ func TestAuctionPricesToolAnswersForTheCharactersMarket(t *testing.T) {
 	w.saveStatus(auctionStatus{})
 
 	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
-	if _, err := w.update(context.Background(), m); err != nil {
+	if _, err := w.update(context.Background(), w.bn, m); err != nil {
 		t.Fatal(err)
 	}
 	out, err := ask(horde, `"items":[{"id":2589},{"id":7469},{"id":7469,"link":"item:7469::::::::15::::1:12718:1:28:5254"},{"id":7469,"link":"item:7469::::::::15::::1:12720::::"},{"id":5}],"quantity":30`)
@@ -487,6 +490,93 @@ func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
 	w.refresh(ctx)
 	if status := loadAuctionStatus(dir); w.bn.token != "" || status.Refused != "" || status.Items != "" {
 		t.Fatalf("turned off: %q %+v", w.bn.token, status)
+	}
+}
+
+// fakeMirror serves the test house the way the mirror does: gzip, Blizzard's Last-Modified, 304, no token.
+func fakeMirror(t *testing.T) (requests *[]string) {
+	t.Helper()
+	var seen []string
+	modified := "Fri, 20 Nov 2026 17:23:20 GMT"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Path+" "+r.Header.Get("If-Modified-Since"))
+		body := map[string]string{"/v1/auctions/eu/114": testHouse, "/v1/auctions/eu/114/commodities": testCommodities}[r.URL.Path]
+		if body == "" || r.Header.Get("Authorization") != "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Last-Modified", modified)
+		if r.Header.Get("If-Modified-Since") == modified {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		z := gzip.NewWriter(w)
+		z.Write([]byte(body))
+		z.Close()
+	}))
+	t.Cleanup(srv.Close)
+	old := auctionMirrorURL
+	auctionMirrorURL = func() string { return srv.URL }
+	t.Cleanup(func() { auctionMirrorURL = old })
+	return &seen
+}
+
+func TestAuctionMirrorStandsInForAMissingClient(t *testing.T) {
+	requests := fakeMirror(t)
+	wago := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(wago.Close)
+	oldBuilds := wagoBuildsURL
+	wagoBuildsURL = wago.URL + "/api/builds"
+	t.Cleanup(func() { wagoBuildsURL = oldBuilds })
+
+	snapshots := filepath.Join(t.TempDir(), "snapshots")
+	dir := auctionDir(snapshots)
+	now := time.Now()
+	w := testWatcher(dir, now)
+	w.bn.client = func() (string, string, bool) { return "", "", false }
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	if p := auctionProblem(snapshots, m, nil); p == nil || p.Code != "pending" {
+		t.Fatal("with the mirror on, a missing client is no setup problem:", p)
+	}
+	if err := recordMarket(dir, m, now); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	w.refresh(ctx)
+	book, err := loadAuctionBook(filepath.Join(dir, "eu-114.json"))
+	if err != nil || book.Items[2589] == nil || book.Items[7469] == nil || book.Modified["commodities"] != "Fri, 20 Nov 2026 17:23:20 GMT" {
+		t.Fatalf("the house comes through the mirror: %+v %v", book, err)
+	}
+	if p := auctionProblem(snapshots, m, nil); p != nil {
+		t.Fatal("prices are there:", p)
+	}
+	*requests = nil
+	w.refresh(ctx)
+	if len(*requests) != 2 || (*requests)[0] != "/v1/auctions/eu/114 Fri, 20 Nov 2026 17:23:20 GMT" {
+		t.Fatal("an unchanged house is only asked about:", *requests)
+	}
+	if status := loadAuctionStatus(dir); len(status.Failing) != 0 || status.Refused != "" {
+		t.Fatalf("nothing failed: %+v", status)
+	}
+
+	// A path the mirror does not serve is refused before any request.
+	if _, err := (&auctionMirror{base: "https://x", http: http.DefaultClient}).get(ctx, "eu", "/data/wow/token/index", ""); err == nil {
+		t.Fatal("only auction house paths go to the mirror")
+	}
+}
+
+func TestAuctionMirrorAddressComesFromSettings(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                       defaultAuctionMirror,
+		"off":                    "",
+		"https://example.org/":   "https://example.org",
+		"http://example.org":     "",
+		" https://example.org  ": "https://example.org",
+	} {
+		if got := mirrorAddress(settings{AuctionMirror: in}); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
 	}
 }
 

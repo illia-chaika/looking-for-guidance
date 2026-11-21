@@ -11,3 +11,6 @@ __pycache__/
 
 # Working notes of coding agents on a development machine.
 /.local/
+
+# The project's Cloudflare Workers, kept in a repository of their own.
+/workers/

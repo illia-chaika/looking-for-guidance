@@ -43,7 +43,7 @@ func (a *app) trayReady() {
 	useCodex := adviser.AddSubMenuItemCheckbox("Codex", "", a.view().provider != "claude")
 	useClaude := adviser.AddSubMenuItemCheckbox("Claude Code", "", a.view().provider == "claude")
 	runWith := systray.AddMenuItemCheckbox(tr("Start with WoW"), tr("Start the companion together with the game"), a.view().runWithWoW)
-	prices := systray.AddMenuItemCheckbox(tr("Auction prices"), tr("Asking prices on your auction house, read with your own Battle.net API client"), false)
+	prices := systray.AddMenuItemCheckbox(tr("Own Battle.net API client"), tr("Auction prices come from the project's mirror; with this on, the companion asks Blizzard with your own API client instead"), false)
 	choose := systray.AddMenuItem(tr("Choose the WoW folder…"), "")
 	choose.Hide()
 	retryAccess := systray.AddMenuItem(tr("Retry access to the WoW folder"), "")

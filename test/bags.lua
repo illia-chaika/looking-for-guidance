@@ -148,7 +148,7 @@ local function hint(off)
         if r.kind == "text" and (r.text:find("Auction prices", 1, true) or r.text:find("Blizzard", 1, true)) then return r.text end
     end
 end
-assert(hint("setup") == "Auction prices are not set up: choose “Auction prices” in the Looking for Guidance menu.", hint("setup"))
+assert(hint("setup") == "Auction prices are off: the project’s mirror is turned off in settings.json and there is no Battle.net API client of your own.", hint("setup"))
 assert(hint("failing") == "Auction prices are still downloading.", "a failing download reads as still downloading")
 assert(hint("unknown") == nil and hint(nil) == nil, "an unknown code or none shows nothing")
 

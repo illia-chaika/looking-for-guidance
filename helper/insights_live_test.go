@@ -41,7 +41,8 @@ func TestLiveInsight(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := newAuctionWatcher(filepath.Join(filepath.Dir(dir), "auctions")).update(context.Background(), m); err != nil {
+		w := newAuctionWatcher(filepath.Join(filepath.Dir(dir), "auctions"))
+		if _, err := w.update(context.Background(), w.bn, m); err != nil {
 			t.Fatal(err)
 		}
 	}
