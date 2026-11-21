@@ -1,0 +1,11 @@
+name: Idea
+description: Something the adviser or the journal could do for you.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: What would help you in the game, and when would you use it?
+    validations:
+      required: true

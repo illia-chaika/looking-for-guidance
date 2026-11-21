@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in the add-on or the companion does not work as it should.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "*Check for Updates…* in the companion's menu shows it (0.10.2 and later). Earlier versions: write the one you downloaded."
+      placeholder: "0.10.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: dropdown
+    id: adviser
+    attributes:
+      label: Adviser
+      options:
+        - Claude Code
+        - Codex
+        - Not set up yet
+  - type: input
+    id: language
+    attributes:
+      label: Game language
+      placeholder: English, Deutsch, Русский…
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw instead. A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        The lines of `helper.log` from the time it happened. The file is in `~/Library/Application Support/Looking for Guidance/` on macOS and in `%AppData%\Looking for Guidance\` on Windows.
+        The log shows folder paths with your user name and may name your characters: remove what you do not want public.
+      render: text

@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # macOS: the companion links CoreFoundation through cgo, and some tests drive the macOS process watcher.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install Lua
+        run: brew install lua
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+      - name: Go tests
+        run: go test ./...
+      - name: Lua tests
+        run: for t in test/*.lua; do [ "$t" = test/wow.lua ] || lua "$t" || exit 1; done
+      - name: Installer tests
+        run: python3 test/install_quiesce.py && python3 test/install_addon_payload.py
