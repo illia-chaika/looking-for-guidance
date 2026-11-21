@@ -61,7 +61,7 @@ done.insights = { { kind = "digest", key = "me", state = "ready", at = time(), d
 wow.payload = done
 T.Sync.Check()
 card = hub.Cards(hub.Model({})).news
-assert(card.title == "Two changes for your mage" and card.reason == "Changes for you: 2" and card.kicker == "Hotfixes of 11.11")
+assert(card.title == "Two changes for your mage" and card.reason == "Changes for you: 2" and card.kicker == "Hotfixes from 11.11")
 assert(card.rows[1].text == "Concerns you directly" and card.rows[2].title == "Arcane Blast lasts 18 seconds." and card.rows[2].value == "6.11")
 assert(card.rows[3].text == "Good to know" and card.rows[5].kind == "sources" and card.rows[5].list[1].url:find("blizzard", 1, true))
 assert(card.persist and card.signal == "2026-11-11:2:2026-11-09")

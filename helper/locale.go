@@ -22,7 +22,7 @@ var menuTexts = map[string][10]string{
 		"WoW와 함께 시작", "随 WoW 启动", "隨 WoW 啟動",
 		"Avvia con WoW", "Запускати разом із WoW"},
 	"Start the companion together with the game": {
-		"Запускать помощника вместе с игрой", "Den Begleiter zusammen mit dem Spiel starten",
+		"Запускать помощника вместе с игрой", "Companion zusammen mit dem Spiel starten",
 		"Lancer le compagnon en même temps que le jeu", "Iniciar el compañero junto con el juego",
 		"Iniciar o companheiro junto com o jogo", "게임과 함께 도우미를 시작합니다", "与游戏一同启动助手", "與遊戲一同啟動助手",
 		"Avvia l’app compagna insieme al gioco", "Запускати помічника разом із грою"},
@@ -52,7 +52,7 @@ var menuTexts = map[string][10]string{
 		"Comprueba el permiso del disco y elige «Reintentar el acceso».",
 		"Verifique a permissão do disco e escolha “Tentar acessar novamente”.",
 		"디스크 권한을 확인한 뒤 ‘접근 다시 시도’를 선택하세요.", "请检查磁盘权限，然后选择“重试访问”。", "請檢查磁碟權限，然後選擇「重試存取」。",
-		"Controlla il permesso per il disco e scegli «Riprova l’accesso».", "Перевір дозвіл на диск і натисни «Повторити доступ»."},
+		"Controlla il permesso per il disco e scegli «Riprova ad accedere alla cartella di WoW».", "Перевір дозвіл на диск і натисни «Повторити доступ»."},
 	"Choose the WoW Forever folder": {
 		"Выбери папку WoW Forever", "Wähle den Ordner von WoW Forever", "Choisis le dossier de WoW Forever",
 		"Elige la carpeta de WoW Forever", "Escolha a pasta do WoW Forever", "WoW Forever 폴더를 선택하세요",
@@ -79,7 +79,7 @@ var menuTexts = map[string][10]string{
 		"Impossible de vérifier l’addon : %s", "No se pudo comprobar el addon: %s",
 		"Não foi possível verificar o addon: %s", "애드온을 확인하지 못했습니다: %s", "无法检查插件：%s", "無法檢查插件：%s",
 		"Impossibile controllare l’add-on: %s", "Не вдалося перевірити аддон: %s"},
-	"Adviser": {"Советник", "Ratgeber", "Conseiller", "Asesor", "Conselheiro", "조언자", "顾问", "顧問",
+	"Adviser": {"Советник", "Berater", "Conseiller", "Consejero", "Conselheiro", "조언자", "顾问", "顧問",
 		"Consigliere", "Порадник"},
 	"%s was not found": {
 		"Не удалось найти %s", "%s wurde nicht gefunden", "%s est introuvable", "No se encontró %s",
@@ -100,8 +100,8 @@ var menuTexts = map[string][10]string{
 		"Entrar no ChatGPT…", "ChatGPT에 로그인…", "登录 ChatGPT…", "登入 ChatGPT…",
 		"Accedi a ChatGPT…", "Увійти в ChatGPT…"},
 	"No adviser was found": {
-		"Не найден ни один советник", "Kein Ratgeber gefunden", "Aucun conseiller trouvé",
-		"No se encontró ningún asesor", "Nenhum conselheiro encontrado", "조언자를 찾을 수 없음",
+		"Не найден ни один советник", "Kein Berater gefunden", "Aucun conseiller trouvé",
+		"No se encontró ningún consejero", "Nenhum conselheiro encontrado", "조언자를 찾을 수 없음",
 		"未找到任何顾问", "找不到任何顧問",
 		"Nessun consigliere trovato", "Не знайдено жодного порадника"},
 	"Sign in to Claude Code": {

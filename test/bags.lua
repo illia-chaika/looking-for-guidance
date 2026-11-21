@@ -82,7 +82,7 @@ assert(section(c, "Not usable by you") == "Severing Axe of the Monkey; Recipe: M
 assert(row(c, "Severing Axe of the Monkey").text == "Two-Handed Axes", "the reason is the game's own red line, already in the player's language")
 assert(section(c, "Useful later") == "Staff of the Sage" and row(c, "Staff of the Sage").text == "Requires Level 20")
 assert(row(c, "Johaan's Findings").state == "done" and row(c, "Johaan's Findings").text == "Quest item")
-assert(c.rows[1].kind == "verdict" and c.rows[1].title == "A vendor will free 3 slots" and c.rows[1].text == "About 0g 3s 47c in coin.")
+assert(c.rows[1].kind == "verdict" and c.rows[1].title == "Slots freed at a vendor: 3" and c.rows[1].text == "About 0g 3s 47c in coin.")
 assert(c.summary == "Slots you can free: 3" and row(c, "Broken Fang ×3").link:find("item:117", 1, true))
 
 assert(#sent() == 0 and c.rows[#c.rows].kind == "actions", "with research on click, opening the card asks nothing and offers a button")
@@ -107,7 +107,7 @@ wow.payload = payload
 T.Sync.Check()
 c = card()
 assert(section(c, "Sell to a vendor") == "Linen Cloth ×26; Broken Fang ×3" and section(c, "Put in the bank") == "Earthroot ×5")
-assert(section(c, "Use now") == "Forest Mushroom Cap" and c.rows[1].title == "A vendor will free 5 slots")
+assert(section(c, "Use now") == "Forest Mushroom Cap" and c.rows[1].title == "Slots freed at a vendor: 5")
 
 -- With auction prices the helper adds what each item asks for on the character's market.
 payload = CopyTable(payload)
@@ -126,7 +126,7 @@ assert(row(c, "Linen Cloth ×26").text == "Cheap cloth.", "an item nobody sells 
 local stamp
 for _, r in ipairs(c.rows) do if r.kind == "text" and r.text:find("Blizzard", 1, true) then stamp = r.text end end
 local fresh = data.prices_at
-assert(stamp == "Auction prices: Blizzard's snapshot of " .. date("%H:%M", fresh) .. ".", "a fresh snapshot shows its time: " .. stamp)
+assert(stamp == "Auction prices: Blizzard data from " .. date("%H:%M", fresh) .. ".", "a fresh snapshot shows its time: " .. stamp)
 payload = CopyTable(payload)
 payload.rev = payload.rev + 1
 payload.insights[1].data.prices_at = time() - 2 * 86400
@@ -134,7 +134,7 @@ wow.payload = payload
 T.Sync.Check()
 stamp = nil
 for _, r in ipairs(card().rows) do if r.kind == "text" and r.text:find("Blizzard", 1, true) then stamp = r.text end end
-assert(stamp == "Auction prices: Blizzard's snapshot of " .. date("%d.%m %H:%M", time() - 2 * 86400) .. ".", "an old one its date too: " .. stamp)
+assert(stamp == "Auction prices: Blizzard data from " .. date("%d.%m %H:%M", time() - 2 * 86400) .. ".", "an old one its date too: " .. stamp)
 
 -- A remembered wish wins over the advice to sell.
 T.Store.memory = { character = "Player-1-121A", login = "login", notes = { { scope = "character", topic = "bags", text = "Keep my Linen Cloth for bandages." } } }
