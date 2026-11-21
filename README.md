@@ -222,7 +222,7 @@ unsigned, with the executable (which carries the add-on) and the licences. On Wi
 
 ```sh
 go test ./...
-for t in test/*.lua; do [ "$t" = test/wow.lua ] || lua "$t" || break; done
+(for t in test/*.lua; do [ "$t" = test/wow.lua ] || lua "$t" || exit 1; done)
 python3 test/install_quiesce.py && python3 test/install_addon_payload.py
 ```
 
