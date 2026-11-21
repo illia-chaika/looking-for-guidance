@@ -104,11 +104,15 @@ var menuTexts = map[string][10]string{
 		"No se encontró ningún consejero", "Nenhum conselheiro encontrado", "조언자를 찾을 수 없음",
 		"未找到任何顾问", "找不到任何顧問",
 		"Nessun consigliere trovato", "Не знайдено жодного порадника"},
-	"Sign in to Claude Code": {
-		"Войди в Claude Code", "Melde dich bei Claude Code an", "Connecte-toi à Claude Code",
-		"Inicia sesión en Claude Code", "Entre no Claude Code", "Claude Code에 로그인하세요",
-		"请登录 Claude Code", "請登入 Claude Code",
-		"Accedi a Claude Code", "Увійди в Claude Code"},
+	"Claude Code is not signed in": {
+		"Claude Code не вошёл в аккаунт", "Claude Code ist nicht angemeldet", "Claude Code n’est pas connecté",
+		"Claude Code no ha iniciado sesión", "O Claude Code não está conectado", "Claude Code에 로그인되어 있지 않음",
+		"Claude Code 尚未登录", "Claude Code 尚未登入",
+		"Claude Code non ha effettuato l’accesso", "Claude Code не ввійшов в обліковий запис"},
+	"Sign in to Claude Code…": {
+		"Войти в Claude Code…", "Bei Claude Code anmelden…", "Se connecter à Claude Code…", "Iniciar sesión en Claude Code…",
+		"Entrar no Claude Code…", "Claude Code에 로그인…", "登录 Claude Code…", "登入 Claude Code…",
+		"Accedi a Claude Code…", "Увійти в Claude Code…"},
 }
 
 var menuLanguage = sync.OnceValue(func() string {

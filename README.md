@@ -134,9 +134,11 @@ so expect problems, and please report what you find in an
 The adviser is chosen in the menu under *Adviser*, and everything goes to the one you chose. If you have only
 Claude Code installed, the companion uses it without asking; nothing of Codex is started or created.
 
-**With Claude Code** there is nothing else to set up: sign in once with `claude auth login`. The companion starts
-Claude Code without your own Claude settings, memory files, skills or MCP servers, so the adviser behaves the same
-on every machine.
+**With Claude Code** there is nothing else to set up: sign in once. While the game runs, the menu offers what is
+missing. *Install Claude Code…* opens Terminal (PowerShell on Windows) with the official installer
+(`curl -fsSL https://claude.ai/install.sh | bash`) followed by `claude auth login`, which finishes in the browser;
+*Sign in to Claude Code…* runs only the sign-in. The companion starts Claude Code without your own Claude settings,
+memory files, skills or MCP servers, so the adviser behaves the same on every machine.
 
 **With Codex**, the companion keeps the adviser apart from your own Codex setup in a profile it creates itself on
 first use (`~/Library/Application Support/Looking for Guidance Codex/config.toml`: read-only sandbox, no shell, live

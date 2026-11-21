@@ -85,6 +85,24 @@ func openURL(url string) {
 	}
 }
 
+// openTerminal has Terminal run the script in a new window. Terminal runs a .command file it is asked to open, and
+// opening a file needs no permission to control Terminal, unlike AppleScript's do script.
+func openTerminal(name, script string) error {
+	dir := filepath.Join(os.TempDir(), "looking-for-guidance")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, name+".command")
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		return err
+	}
+	// WriteFile keeps the mode of a file that is already there.
+	if err := os.Chmod(path, 0o700); err != nil {
+		return err
+	}
+	return exec.Command("open", "-a", "Terminal", path).Run()
+}
+
 func launchAgentPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, "Library", "LaunchAgents", "io.github.illia-chaika.looking-for-guidance.plist")

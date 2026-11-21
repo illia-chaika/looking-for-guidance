@@ -115,6 +115,18 @@ func openURL(url string) {
 	}
 }
 
+// openTerminal opens a PowerShell window that runs the script and stays open afterwards, so the player can read what
+// it said.
+func openTerminal(_, script string) error {
+	cmd := exec.Command("powershell.exe", "-NoExit", "-NoProfile", "-Command", script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_CONSOLE}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait()
+	return nil
+}
+
 var runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
 
 func setAutostart(on bool, exe string) error {

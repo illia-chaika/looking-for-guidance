@@ -33,7 +33,7 @@ const noAdviserNote = "Не найден ни один советник. Уст�
 
 var claudeNotes = map[string]string{
 	"missing":    "Не удалось найти Claude Code. Установи его или выбери другого советника в меню Looking for Guidance.",
-	"signed-out": "Войди в Claude Code: выполни claude auth login в терминале.",
+	"signed-out": "Войди в Claude Code: выбери «Войти в Claude Code…» в меню Looking for Guidance.",
 	"error":      "Подключаюсь к Claude Code…",
 }
 

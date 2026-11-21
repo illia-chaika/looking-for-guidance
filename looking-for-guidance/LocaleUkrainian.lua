@@ -46,7 +46,7 @@ T.AddLocaleColumn("ukUA", {
     ["Включи группу Looking for Guidance в списке аддонов WoW."] = "Увімкни групу Looking for Guidance у списку аддонів WoW.",
     ["Вложения"] = "Вкладення",
     ["Войди в ChatGPT: выбери «Войти в ChatGPT…» в меню Looking for Guidance."] = "Увійди в ChatGPT: вибери «Увійти в ChatGPT…» у меню Looking for Guidance.",
-    ["Войди в Claude Code: выполни claude auth login в терминале."] = "Увійди в Claude Code: виконай claude auth login у терміналі.",
+    ["Войди в Claude Code: выбери «Войти в Claude Code…» в меню Looking for Guidance."] = "Увійди в Claude Code: вибери «Увійти в Claude Code…» у меню Looking for Guidance.",
     ["Вопрос с данными слишком велик. Сократи текст или отключи лишние разделы."] = "Запитання з даними завелике. Скороти текст або вимкни зайві розділи.",
     ["Все"] = "Усі",
     ["Все задачи"] = "Усі задачі",

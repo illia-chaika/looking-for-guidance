@@ -63,6 +63,11 @@ func (a *app) trayReady() {
 		installAgent.SetTitle(tr("Install %s…", v.installName))
 		visible(installAgent, v.install)
 		visible(installClaude, v.installOther)
+		if v.provider == "claude" {
+			signIn.SetTitle(tr("Sign in to Claude Code…"))
+		} else {
+			signIn.SetTitle(tr("Sign in to ChatGPT…"))
+		}
 		visible(signIn, v.signIn)
 		check(useCodex, v.provider != "claude")
 		check(useClaude, v.provider == "claude")
@@ -93,14 +98,18 @@ func (a *app) trayReady() {
 			go a.chooseFolder()
 		case <-installAgent.ClickedCh:
 			if a.view().provider == "claude" {
-				openURL(claudeURL)
+				go a.setUpClaude()
 			} else {
 				openURL(codexURL)
 			}
 		case <-installClaude.ClickedCh:
-			openURL(claudeURL)
+			go a.setUpClaude()
 		case <-signIn.ClickedCh:
-			a.signIn()
+			if a.view().provider == "claude" {
+				go a.setUpClaude()
+			} else {
+				a.signIn()
+			}
 		case <-useCodex.ClickedCh:
 			a.setProvider("")
 		case <-useClaude.ClickedCh:

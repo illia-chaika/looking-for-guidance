@@ -69,16 +69,24 @@ func TestTrayStatus(t *testing.T) {
 			a.wowDir, a.running, a.sess = "/wow", true, s
 			s.writeErr = "Couldn't write the payload: denied"
 		}, "Связь с игрой установлена", "Couldn't write the payload: denied", false},
+		{"no Claude Code", func(a *app) {
+			a.wowDir, a.running, a.sess, a.settings.Provider = "/wow", true, s, "claude"
+			s.writeErr, s.hello, s.provider, s.claudeChecked, s.claudeInstalled, s.claudePath = "", time.Time{}, "claude", true, false, ""
+		}, "Не удалось найти Claude Code", "", true},
+		{"Claude Code signed out", func(a *app) {
+			a.wowDir, a.running, a.sess, a.settings.Provider, s.claudeInstalled = "/wow", true, s, "claude", true
+		}, "Claude Code не вошёл в аккаунт", "", true},
 	}
 	for _, c := range cases {
 		a := &app{}
 		c.setup(a)
 		v := a.view()
-		if v.status != c.status || v.detail != c.detail || v.alert != c.alert || v.choose != (c.name == "no folder") || v.install != (c.name == "no CLI" || c.name == "no adviser") {
+		install := c.name == "no CLI" || c.name == "no adviser" || c.name == "no Claude Code"
+		if v.status != c.status || v.detail != c.detail || v.alert != c.alert || v.choose != (c.name == "no folder") || v.install != install {
 			t.Errorf("%s: got %q / %q / alert %v / choose %v / install %v", c.name, v.status, v.detail, v.alert, v.choose, v.install)
 		}
-		// Only a setup with no adviser at all is offered both; only a signed-out Codex is offered the sign-in.
-		if v.installOther != (c.name == "no adviser") || v.signIn != (c.name == "signed out") {
+		// Only a setup with no adviser at all is offered both; only a signed-out adviser is offered the sign-in.
+		if v.installOther != (c.name == "no adviser") || v.signIn != (c.name == "signed out" || c.name == "Claude Code signed out") {
 			t.Errorf("%s: second install item %v, sign-in item %v", c.name, v.installOther, v.signIn)
 		}
 	}

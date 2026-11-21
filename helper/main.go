@@ -397,7 +397,7 @@ func (a *app) view() trayView {
 		case sv.provider == "claude" && sv.claudeChecked && !sv.claudeInstalled:
 			v.status, v.install, v.alert = tr("%s was not found", v.installName), true, true
 		case sv.provider == "claude" && sv.claudeChecked:
-			v.status, v.alert = tr("Sign in to Claude Code"), true
+			v.status, v.alert, v.signIn = tr("Claude Code is not signed in"), true, true
 		case sv.provider == "claude":
 			v.status = tr("Waiting for a character to enter the game")
 		case sv.noAdviser:

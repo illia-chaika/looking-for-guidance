@@ -25,4 +25,6 @@ func openURL(url string) {
 
 func setAutostart(bool, string) error { return errors.ErrUnsupported }
 
+func openTerminal(string, string) error { return errors.ErrUnsupported }
+
 func findInstalledOS(string) string { return "" }
