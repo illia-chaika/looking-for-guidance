@@ -6,8 +6,14 @@ not against fifteen-year-old guides.
 
 Every player has typed LFG. This is the other kind: looking for guidance.
 
+Ask it things like *"Where do I hand this quest in?"*, *"Is this staff better than mine?"*, *"What should I sell
+before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
+
 > **Status: pre-release.** Developed and played on macOS. The Windows build compiles but has not been run yet, and
-> for now you build the app yourself (see [Setup](#setup)).
+> for now you build the app yourself (see [Setup](#setup)). Advice runs on your own Claude or ChatGPT plan, through
+> Claude Code or the Codex CLI.
+
+<p align="center"><img src="docs/chat.png" width="640" alt="The chat window: a question about a chest upgrade, answered with three items from the character's auction house and their prices"></p>
 
 ## What it does
 
@@ -34,7 +40,10 @@ research is prepared when you press the section's button — or by itself, if yo
 | Gold and training | Which ranks are worth buying, what to skip, and whether you will afford the mount |
 | Dungeons | Quests to pick up before you enter, where to get them, and tips for a first run |
 
+<p align="center"><img src="docs/journal.png" width="49%" alt="The journal's overview: a suggested next step and all eight sections"> <img src="docs/bags.png" width="49%" alt="The Bags section: what to sell, list on the auction house or bank, with prices"></p>
+
 Every prepared answer shows its sources and when it was checked, and says so when a source is not about Forever.
+The pictures are drawn from the add-on's own styles with made-up data, not taken from the game.
 
 The interface follows the game's language: English, German, French, Spanish, Brazilian Portuguese, Korean,
 Simplified and Traditional Chinese, and Russian.
@@ -177,6 +186,7 @@ to switch it off: downloads stop, and the tools are no longer offered once the l
 | `helper/` | The companion in Go: transport, agent sessions, MCP server, journal research, tray |
 | `tools/` | Build and local install scripts, emoji atlas and journal artwork generators |
 | `test/`, `samples/` | Lua test harness that stands in for the game client, installer checks, sample payloads |
+| `docs/` | The pictures in this README, drawn from the add-on's colours, fonts and generated artwork |
 
 ```sh
 go test ./...
