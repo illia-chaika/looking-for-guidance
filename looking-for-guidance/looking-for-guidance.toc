@@ -10,6 +10,7 @@
 ## Notes-koKR: 퀘스트, 장비, 특성을 안내하는 게임 내 도우미입니다.
 ## Notes-zhCN: 游戏内的任务、装备和天赋助手。
 ## Notes-zhTW: 遊戲內的任務、裝備與天賦助手。
+## Notes-itIT: Consigliere in gioco per missioni, equipaggiamento e talenti.
 ## Author: thott.bot contributors, Looking for Guidance contributors
 ## Version: 0.10.0-local
 ## Category: Looking for Guidance
@@ -51,6 +52,8 @@ Popovers.lua
 HubStrings.lua
 AdvisorStrings.lua
 SmartStrings.lua
+LocaleItalian.lua
+LocaleUkrainian.lua
 HubPage.lua
 HubMemory.lua
 HubOverview.lua

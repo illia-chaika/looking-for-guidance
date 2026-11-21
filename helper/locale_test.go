@@ -30,7 +30,9 @@ func TestMenuLanguageFollowsTheFirstPreferenceItHas(t *testing.T) {
 		want      string
 	}{
 		{[]string{"en-US", "ru-UA", "uk-UA"}, "en"},
-		{[]string{"uk-UA", "ru-UA", "en-US"}, "ru"},
+		{[]string{"uk-UA", "ru-UA", "en-US"}, "uk"},
+		{[]string{"be-BY", "ru-UA", "en-US"}, "ru"},
+		{[]string{"it-IT"}, "it"},
 		{[]string{"ru_RU.UTF-8"}, "ru"},
 		{[]string{"pt-BR"}, "pt"},
 		{[]string{"zh-Hant-TW"}, "zh-Hant"},

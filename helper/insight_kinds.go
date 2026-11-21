@@ -11,6 +11,7 @@ import (
 var insightLanguages = map[string]string{
 	"ruRU": "Russian", "enUS": "English", "enGB": "English", "deDE": "German", "frFR": "French", "esES": "Spanish",
 	"esMX": "Latin American Spanish", "ptBR": "Brazilian Portuguese", "koKR": "Korean", "zhCN": "Simplified Chinese", "zhTW": "Traditional Chinese",
+	"itIT": "Italian", "ukUA": "Ukrainian",
 }
 
 // insightPreamble is the common part of every hidden research prompt.

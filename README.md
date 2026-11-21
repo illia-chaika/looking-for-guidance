@@ -45,8 +45,9 @@ research is prepared when you press the section's button — or by itself, if yo
 Every prepared answer shows its sources and when it was checked, and says so when a source is not about Forever.
 The pictures are drawn from the add-on's own styles with made-up data, not taken from the game.
 
-The interface follows the game's language: English, German, French, Spanish, Brazilian Portuguese, Korean,
-Simplified and Traditional Chinese, and Russian.
+The interface follows the game's language: English, German, French, Spanish, Italian, Brazilian Portuguese, Korean,
+Simplified and Traditional Chinese, and Russian. Ukrainian, which the game itself does not offer, is chosen in the
+add-on's settings.
 
 ## How it works
 

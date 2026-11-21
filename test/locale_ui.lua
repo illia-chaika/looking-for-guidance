@@ -26,7 +26,7 @@ local function openLanguage()
 end
 local snapshot = T.Store.Threads()[1].title
 assert(T.GetUILocale() == "enUS" and T.settings.locale == "auto")
-assert(#T.LocaleOptions == 12 and T.L("Сохранить") == "Save")
+assert(#T.LocaleOptions == 14 and T.L("Сохранить") == "Save")
 assert(T.FontFile("PTSans-Regular.ttf", "Which item?") == T.media .. "PTSans-Regular.ttf")
 assert(T.FontFile("PTSans-Regular.ttf", "어느 아이템?") == T.media .. "DroidSansFallback.ttf")
 assert(T.FontFile("PTSans-Regular.ttf", "物品") == T.media .. "DroidSansFallback.ttf")
@@ -57,6 +57,12 @@ assert(T.Store.Threads()[1].title == snapshot)
 for _, choice in ipairs(T.LocaleOptions) do
     if choice.code ~= "ruRU" then assert(T.LFor(choice.code,"Сохранить") ~= "Сохранить") end
 end
+-- Italian and Ukrainian come from their own files, not from the English column.
+for _, code in ipairs({ "itIT", "ukUA" }) do
+    local text = T.LFor(code, "Сохранить")
+    assert(text ~= "Save" and text == T.LocaleText(code, "Сохранить"), code .. " has its own caption: " .. text)
+end
+assert(T.LocaleChoice("ukUA") == "ukUA" and T.LocaleChoice("itIT") == "itIT", "both can be chosen in the settings")
 openLanguage()
 named("Русский"):Fire("OnClick")
 named("저장"):Fire("OnClick")
@@ -68,4 +74,4 @@ assert(T.settings.locale == "auto" and T.GetUILocale() == "enUS")
 local probe = CreateFrame("Frame", nil, UIParent):CreateFontString()
 T.SetContent(probe, "всего 26\226\128\175361, 1\226\128\137000, 2\226\128\128000 и\226\128\139 ещё")
 assert(probe:GetText() == "всего 26\194\160361, 1\194\160000, 2\194\160000 и ещё", "typographic spaces become the no-break space the fonts draw")
-print("Locale: auto and 11 regional choices, staged Apply/Cancel, CJK font, live control updates and original transcript OK")
+print("Locale: auto and 13 regional choices, staged Apply/Cancel, CJK font, live control updates and original transcript OK")

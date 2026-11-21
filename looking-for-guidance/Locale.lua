@@ -1,6 +1,9 @@
 local _, T = ...
 
 local columns = { enUS = 1, enGB = 1, deDE = 2, frFR = 3, esES = 4, esMX = 4, ptBR = 5, koKR = 6, zhCN = 7, zhTW = 8 }
+-- Italian and Ukrainian live in files of their own, keyed by the same Russian source (LocaleItalian.lua,
+-- LocaleUkrainian.lua). The game has an Italian client; Ukrainian is chosen in the settings.
+local added = { itIT = {}, ukUA = {} }
 local mexico = { ["Настройки"] = "Configuración", ["Настройки советника"] = "Configuración del consejero", ["Сумки"] = "Bolsas" }
 
 T.LocaleOptions = {
@@ -10,8 +13,9 @@ T.LocaleOptions = {
     { code = "esMX", name = "Español (Latinoamérica)" }, { code = "ptBR", name = "Português (Brasil)" },
     { code = "ruRU", name = "Русский" }, { code = "koKR", name = "한국어" },
     { code = "zhCN", name = "简体中文" }, { code = "zhTW", name = "繁體中文" },
+    { code = "itIT", name = "Italiano" }, { code = "ukUA", name = "Українська" },
 }
-local function supported(code) return code == "ruRU" or columns[code] ~= nil end
+local function supported(code) return code == "ruRU" or columns[code] ~= nil or added[code] ~= nil end
 
 function T.LocaleChoice(code)
     return supported(code) and code or "auto"
@@ -27,11 +31,20 @@ function T.AddLocaleRows(rows)
     for source, row in pairs(rows) do T.LocaleRows[source] = row end
 end
 
+function T.AddLocaleColumn(code, texts)
+    for source, text in pairs(texts) do added[code][source] = text end
+end
+
+function T.LocaleText(code, source)
+    return added[code] and added[code][source]
+end
+
 function T.LFor(code, source, ...)
     if type(source) ~= "string" then return source end
     local locale = T.GetUILocale(code)
     local row = T.LocaleRows[source]
-    local pattern = locale == "esMX" and mexico[source] or row and row[columns[locale]] or source
+    local pattern = locale == "esMX" and mexico[source] or added[locale] and (added[locale][source] or row and row[1])
+        or row and row[columns[locale]] or source
     if select("#", ...) == 0 then return pattern end
     local args = { ... }
     return (pattern:gsub("{(%d+)}", function(index) return tostring(args[tonumber(index)] or "") end))

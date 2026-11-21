@@ -38,7 +38,21 @@ need("Касается тебя напрямую", "HubNews.lua")
 need("Полезно знать", "HubNews.lua")
 need("Проверено: {1}", "HubPage.lua")
 need("Каналов связи осталось: {1}", "Alerts.lua")
-if #missing > 0 then
-    error("captions without eight translations:\n" .. table.concat(missing, "\n"))
+-- Italian and Ukrainian have a file each: every caption of the add-on needs both, with its placeholders.
+local columns = 0
+for key in pairs(T.LocaleRows) do
+    columns = columns + 1
+    for _, code in ipairs({ "itIT", "ukUA" }) do
+        local text = T.LocaleText(code, key)
+        local complete = type(text) == "string" and text ~= ""
+        if complete then
+            for index in key:gmatch("{(%d+)}") do complete = complete and text:find("{" .. index .. "}", 1, true) ~= nil end
+        end
+        if not complete then missing[#missing + 1] = code .. ": " .. key end
+    end
 end
-print("Locale: " .. count .. " new journal captions have all eight translations and their placeholders")
+if #missing > 0 then
+    error("captions without all translations:\n" .. table.concat(missing, "\n"))
+end
+print("Locale: " .. count .. " new journal captions have all eight translations and their placeholders; all " .. columns
+    .. " captions have Italian and Ukrainian")

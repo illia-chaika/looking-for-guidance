@@ -14,7 +14,7 @@ under the GNU General Public License, version 3. The modifications are distribut
 - A field journal was added: overview cards, eight sections, hidden research jobs with validated answers, a feed of
   Blizzard's hotfixes and known issues.
 - Per-character conversations and memory, Shift-click links, colour emoji, appearance and language settings,
-  nine interface languages.
+  eleven interface languages.
 - Transport: 512 one-shot payload channels instead of 128, a bounded polling budget, a minimum spacing between
   frames, check frames that rebuild up to six missed frames in a row, automatic resend of unacknowledged packets,
   diagnostics for missed frames.
@@ -25,7 +25,7 @@ under the GNU General Public License, version 3. The modifications are distribut
 - Journal research runs only on request unless the player switches it to automatic, within a daily cap the player
   sets; the adviser's remaining allowance is shown in the game where the provider reports it.
 - The chat draws Markdown tables, headings and numbered lists; a table too wide for the window is shown as a list.
-- The companion's menu in nine languages, following the system language.
+- The companion's menu in eleven languages, following the system language.
 - Optional auction prices: the player's own Battle.net API client in the macOS keychain, an hourly snapshot of the
   character's auction house from Blizzard's Game Data API, and a price tool for the adviser; an upgrade search per
   equipment slot that takes slots from the game's item table on wago.tools and lets the game judge the candidates.
