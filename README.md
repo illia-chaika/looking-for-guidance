@@ -9,9 +9,9 @@ Every player has typed LFG. This is the other kind: looking for guidance.
 Ask it things like *"Where do I hand this quest in?"*, *"Is this staff better than mine?"*, *"What should I sell
 before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
 
-> **Status: pre-release.** Developed and played on macOS. The Windows build compiles but has not been run yet, and
-> for now you build the app yourself (see [Setup](#setup)). Advice runs on your own Claude or ChatGPT plan, through
-> Claude Code or the Codex CLI.
+> **Status: first release, macOS only.** A ready-made app for macOS 12 or later on Apple Silicon and Intel, signed and
+> notarized by Apple (see [Setup](#setup)). The Windows build compiles but has not been run yet. Advice runs on your
+> own Claude or ChatGPT plan, through Claude Code or the Codex CLI.
 
 <p align="center"><img src="docs/chat.png" width="640" alt="The chat window: a question about a chest upgrade, answered with three items from the character's auction house and their prices"></p>
 
@@ -108,18 +108,16 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 
 ## Setup
 
-For now you build it yourself.
+**You need:** macOS 12 or later, the game client with a `_forever_` folder, and **one** of the two agents: Claude
+Code with a Claude plan, or the Codex CLI with a ChatGPT plan.
 
-**You need:** macOS, the game client with a `_forever_` folder, Xcode command line tools, Go (the toolchain named
-in `go.mod`), Python 3, and **one** of the two agents: Claude Code with a Claude plan, or the Codex CLI with a
-ChatGPT plan. Lua is needed only for the tests.
+1. Download [looking-for-guidance-macOS.zip](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-macOS.zip)
+   and open the app inside. It offers to move itself to the Applications folder.
+2. Pick the game folder from its menu bar icon and let it install the add-on.
+3. In the game, type `/ask`.
 
-```sh
-./tools/build-macos.sh                     # builds and ad-hoc signs dist/Looking for Guidance.app
-python3 tools/install-local-macos.py       # installs the app and the add-on; close the game first
-```
-
-Start the app, pick the game folder from its menu bar icon, and let it install the add-on. In the game, type `/ask`.
+The app looks for a new version once a day and installs it while the game is closed. To build it yourself, see
+[Development](#development).
 
 The adviser is chosen in the menu under *Adviser*, and everything goes to the one you chose. If you have only
 Claude Code installed, the companion uses it without asking; nothing of Codex is started or created.
@@ -178,6 +176,8 @@ to switch it off: downloads stop, and the tools are no longer offered once the l
 - Claude Code as the adviser has had less play than Codex. In the game it has answered chat questions with the
   character's data and prepared the hotfix digest; the other kinds of journal research were checked outside the
   game only.
+- Development and play have been on Apple Silicon with a current macOS. Intel Macs and macOS 12 to 15 are built for
+  but have not been tried.
 
 ## Development
 
@@ -188,6 +188,18 @@ to switch it off: downloads stop, and the tools are no longer offered once the l
 | `tools/` | Build and local install scripts, emoji atlas and journal artwork generators |
 | `test/`, `samples/` | Lua test harness that stands in for the game client, installer checks, sample payloads |
 | `docs/` | The pictures in this README, drawn from the add-on's colours, fonts and generated artwork |
+
+Building needs Xcode command line tools, Go (the toolchain named in `go.mod`) and Python 3; the tests also need Lua.
+
+```sh
+./tools/build-macos.sh                     # builds dist/Looking for Guidance.app for Apple Silicon and Intel, ad-hoc signed
+python3 tools/install-local-macos.py       # installs the app and the add-on; close the game first
+```
+
+Maintainers make the release download with `./tools/release-macos.sh`: it signs with Developer ID, has Apple notarize
+the app and packs `dist/looking-for-guidance-macOS.zip`. It needs a Developer ID identity in the keychain
+(`LFG_SIGN_IDENTITY` picks one if there are several) and a profile from `xcrun notarytool store-credentials`
+(`LFG_NOTARY_PROFILE`, default `lfg-notary`).
 
 ```sh
 go test ./...
@@ -211,7 +223,7 @@ referenced by path.
 
 ## Roadmap
 
-- Signed and notarized macOS build, Windows build, ready-made releases
+- A ready-made Windows build: the code compiles, but it has not run on Windows yet
 
 ## Licence and credits
 
