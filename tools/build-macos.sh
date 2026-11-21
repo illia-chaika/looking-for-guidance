@@ -30,8 +30,7 @@ for size in 16 32 128 256 512; do
   sips -z "$retina" "$retina" helper/assets/app-icon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o "$build_dir/Resources/AppIcon.icns"
-cp LICENSE looking-for-guidance/Media/OFL-PTSans.txt looking-for-guidance/Media/OFL-PTSerif.txt looking-for-guidance/Media/Apache-2.0-Droid.txt looking-for-guidance/Media/NOTICE-Droid.txt "$build_dir/Resources/"
-cp looking-for-guidance/Media/NOTICE-Twemoji.txt looking-for-guidance/Media/CC-BY-4.0-Twemoji.txt "$build_dir/Resources/"
+tools/copy-notices.sh "$build_dir/Resources"
 python3 - "$build_dir/Resources" <<'PY'
 import hashlib, json, sys, zipfile
 from pathlib import Path
@@ -48,7 +47,6 @@ with zipfile.ZipFile(resources / "addon-payload.zip", "w", zipfile.ZIP_DEFLATED)
         files[relative.as_posix()] = hashlib.sha256(data).hexdigest()
 (resources / "addon-files.json").write_text(json.dumps(files, indent=2) + "\n")
 PY
-go run ./tools/notices "$build_dir/Resources/third-party-notices.txt"
 cp tools/Info.plist "$build_dir/Info.plist"
 plutil -replace CFBundleShortVersionString -string "${version%%-*}" "$build_dir/Info.plist"
 plutil -replace CFBundleVersion -string "${version%%-*}" "$build_dir/Info.plist"

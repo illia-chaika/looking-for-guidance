@@ -40,8 +40,8 @@ under the GNU General Public License, version 3. The modifications are distribut
 | Droid Sans Fallback © The Android Open Source Project | Apache License 2.0 | `looking-for-guidance/Media/Apache-2.0-Droid.txt`, `NOTICE-Droid.txt` |
 | Twemoji graphics © Twitter, Inc and other contributors | CC BY 4.0 | `looking-for-guidance/Media/CC-BY-4.0-Twemoji.txt`, `NOTICE-Twemoji.txt` |
 
-Go modules compiled into the companion are listed with their licences in `third-party-notices.txt`, which the build
-writes into the app bundle (`go run ./tools/notices`).
+Go modules compiled into the companion are listed with their licences in `third-party-notices.txt`, which the builds
+write into the macOS app bundle and the Windows ZIP (`tools/copy-notices.sh`).
 
 ## Trademarks
 

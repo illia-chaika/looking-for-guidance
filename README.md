@@ -9,9 +9,9 @@ Every player has typed LFG. This is the other kind: looking for guidance.
 Ask it things like *"Where do I hand this quest in?"*, *"Is this staff better than mine?"*, *"What should I sell
 before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
 
-> **Status: first release, macOS only.** A ready-made app for macOS 12 or later on Apple Silicon and Intel, signed and
-> notarized by Apple (see [Setup](#setup)). The Windows build compiles but has not been run yet. Advice runs on your
-> own Claude or ChatGPT plan, through Claude Code or the Codex CLI.
+> **Status: first release.** A ready-made app for macOS 12 or later on Apple Silicon and Intel, signed and notarized
+> by Apple (see [Setup](#setup)). The Windows download is experimental: it has never been run on Windows and is not
+> signed. Advice runs on your own Claude or ChatGPT plan, through Claude Code or the Codex CLI.
 
 <p align="center"><img src="docs/chat.png" width="640" alt="The chat window: a question about a chest upgrade, answered with three items from the character's auction house and their prices"></p>
 
@@ -119,6 +119,18 @@ Code with a Claude plan, or the Codex CLI with a ChatGPT plan.
 The app looks for a new version once a day and installs it while the game is closed. To build it yourself, see
 [Development](#development).
 
+**On Windows (experimental).** The Windows download is built from the same code but has never been run on Windows,
+so expect problems, and please report what you find in an
+[issue](https://github.com/illia-chaika/looking-for-guidance/issues). It needs Windows 10 or later on x64.
+
+1. Download [looking-for-guidance-Windows.zip](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-Windows.zip),
+   unzip it and open `Looking for Guidance.exe`. It moves itself to `%LOCALAPPDATA%\Programs\looking-for-guidance`
+   and adds itself to the Start menu.
+2. The app is not signed, so Microsoft Defender SmartScreen stops it with *Windows protected your PC*. Choose
+   **More info**, then **Run anyway**.
+3. Pick the game folder from its icon in the notification area, let it install the add-on, and type `/ask` in the
+   game.
+
 The adviser is chosen in the menu under *Adviser*, and everything goes to the one you chose. If you have only
 Claude Code installed, the companion uses it without asking; nothing of Codex is started or created.
 
@@ -201,6 +213,10 @@ the app and packs `dist/looking-for-guidance-macOS.zip`. It needs a Developer ID
 (`LFG_SIGN_IDENTITY` picks one if there are several) and a profile from `xcrun notarytool store-credentials`
 (`LFG_NOTARY_PROFILE`, default `lfg-notary`).
 
+`./tools/build-windows.sh` makes the experimental Windows download on a Mac: `dist/looking-for-guidance-Windows.zip`,
+unsigned, with the executable (which carries the add-on) and the licences. On Windows, with that ZIP in `dist/`,
+`go test -run TestBuiltZipUnpacks ./helper` unpacks it with the updater's own code.
+
 ```sh
 go test ./...
 for t in test/*.lua; do [ "$t" = test/wow.lua ] || lua "$t" || break; done
@@ -223,7 +239,7 @@ referenced by path.
 
 ## Roadmap
 
-- A ready-made Windows build: the code compiles, but it has not run on Windows yet
+- A tested and signed Windows build: the experimental one has not run on Windows yet
 
 ## Licence and credits
 
