@@ -194,6 +194,8 @@ to switch it off: downloads stop, and the tools are no longer offered once the l
 - Development and play have been on Apple Silicon with a current macOS. Intel Macs and macOS 12 to 15 are built for
   but have not been tried.
 
+Found something else, or have an idea? Open an [issue](https://github.com/illia-chaika/looking-for-guidance/issues/new/choose).
+
 ## Development
 
 | Path | Contents |
