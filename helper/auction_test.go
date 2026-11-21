@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -247,43 +248,36 @@ func TestRecordMarketWakesTheWatcherForANewMarketOnly(t *testing.T) {
 	}
 }
 
+// unavailable checks a tool's answer without prices: JSON with the code, the reason and what the player can do.
+func unavailable(t *testing.T, err error, code string) {
+	t.Helper()
+	var answer map[string]any
+	if err == nil || json.Unmarshal([]byte(err.Error()), &answer) != nil || answer["available"] != false ||
+		answer["code"] != code || answer["reason"] == "" || answer["what_to_do"] == "" {
+		t.Fatalf("want an unavailable answer with code %s, got %v", code, err)
+	}
+}
+
+// useBattleNetClient stores the test client in the in-memory credential store for one test.
+func useBattleNetClient(t *testing.T) {
+	t.Helper()
+	if err := saveBattleNetClient("client", "secret"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { forgetBattleNetClient() })
+}
+
 func TestAuctionPricesToolAnswersForTheCharactersMarket(t *testing.T) {
 	fakeBattleNet(t)
 	root := t.TempDir()
 	dir := filepath.Join(root, "snapshots")
-	if auctionReady(dir) {
-		t.Fatal("nothing downloaded yet")
-	}
+	offered := map[any]bool{}
 	for _, tool := range gameTools(dir) {
-		if tool["name"] == "get_auction_prices" {
-			t.Fatal("the tool is not offered without auction data")
-		}
+		offered[tool["name"]] = true
 	}
-	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
-	if _, err := testWatcher(auctionDir(dir), time.Now()).update(context.Background(), m); err != nil {
-		t.Fatal(err)
+	if !offered["get_auction_prices"] || !offered["find_auction_upgrades"] {
+		t.Fatal("both auction tools are offered before there is any data, to say why there are no prices")
 	}
-	offered := func() bool {
-		for _, tool := range gameTools(dir) {
-			if tool["name"] == "get_auction_prices" {
-				return true
-			}
-		}
-		return false
-	}
-	if !offered() {
-		t.Fatal("the tool is offered once a house is downloaded")
-	}
-	book := filepath.Join(auctionDir(dir), "eu-114.json")
-	old := time.Now().Add(-3 * 24 * time.Hour)
-	os.Chtimes(book, old, old)
-	if offered() {
-		t.Fatal("a summary nobody confirmed for days, as after removing the keychain client, is not offered")
-	}
-	if _, err := testWatcher(auctionDir(dir), time.Now()).update(context.Background(), m); err != nil || !offered() {
-		t.Fatal("confirming an unchanged snapshot offers it again:", err)
-	}
-
 	ask := func(context, args string) (mcpObject, error) {
 		t.Helper()
 		id, err := saveGameSnapshot(dir, parseGameSnapshot(context, 1770000000))
@@ -293,6 +287,31 @@ func TestAuctionPricesToolAnswersForTheCharactersMarket(t *testing.T) {
 		return queryGameSnapshot(dir, "get_auction_prices", json.RawMessage(fmt.Sprintf(`{"snapshot_id":%q,%s}`, id, args)))
 	}
 	horde := "Game: WoW Forever 1.60.1.70938 · EU · PvE\nCharacter: level 15 Orc Warrior, Horde · 1g 0s 0c"
+	linen := `"items":[{"id":2589}]`
+
+	_, err := ask(horde, linen)
+	unavailable(t, err, "setup")
+	if !strings.Contains(err.Error(), "Auction prices") || !strings.Contains(err.Error(), "develop.battle.net") {
+		t.Fatal("without a client the answer names the menu item and the page:", err)
+	}
+	useBattleNetClient(t)
+	_, err = ask(horde, linen)
+	unavailable(t, err, "pending")
+	w := testWatcher(auctionDir(dir), time.Now())
+	w.saveStatus(auctionStatus{Failing: map[string]string{"eu-114": "/data/wow/ruleset/2/auctions/114 answered 503 Service Unavailable"}})
+	if _, err = ask(horde, linen); !strings.Contains(fmt.Sprint(err), "503") {
+		t.Fatal("a failing download says why:", err)
+	}
+	unavailable(t, err, "failing")
+	w.saveStatus(auctionStatus{Refused: "Battle.net refused the API client: 401 Unauthorized"})
+	_, err = ask(horde, linen)
+	unavailable(t, err, "refused")
+	w.saveStatus(auctionStatus{})
+
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	if _, err := w.update(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
 	out, err := ask(horde, `"items":[{"id":2589},{"id":7469},{"id":7469,"link":"item:7469::::::::15::::1:12718:1:28:5254"},{"id":7469,"link":"item:7469::::::::15::::1:12720::::"},{"id":5}],"quantity":30`)
 	if err != nil {
 		t.Fatal(err)
@@ -317,12 +336,17 @@ func TestAuctionPricesToolAnswersForTheCharactersMarket(t *testing.T) {
 		t.Fatal("an item nobody sells:", none)
 	}
 
-	if _, err := ask("Game: WoW Forever 1.60.1.70938 · EU · RP\nCharacter: level 15 Orc Warrior, Horde", `"items":[{"id":2589}]`); err == nil || !strings.Contains(err.Error(), "not known yet") {
+	_, err = ask("Game: WoW Forever 1.60.1.70938 · EU · RP\nCharacter: level 15 Orc Warrior, Horde", linen)
+	if unavailable(t, err, "market"); !strings.Contains(err.Error(), "not known yet") {
 		t.Fatal("a Roleplay market is not guessed:", err)
 	}
-	if _, err := ask("Game: WoW Forever 1.60.1.70938 · EU · PvP\nCharacter: level 15 Orc Warrior, Horde", `"items":[{"id":2589}]`); err == nil || !strings.Contains(err.Error(), "house 113") {
+	_, err = ask("Game: WoW Forever 1.60.1.70938 · EU · PvP\nCharacter: level 15 Orc Warrior, Horde", linen)
+	if unavailable(t, err, "pending"); !strings.Contains(err.Error(), "house 113") {
 		t.Fatal("another market without data says so:", err)
 	}
+	forgetBattleNetClient()
+	_, err = ask(horde, linen)
+	unavailable(t, err, "setup")
 	if _, err := ask(horde, `"items":[]`); err == nil {
 		t.Fatal("an empty list is refused")
 	}
@@ -341,6 +365,7 @@ func TestAuctionToolShowsInTheActivityLine(t *testing.T) {
 }
 
 func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
+	useBattleNetClient(t)
 	e, mu, prompts := testEngine(t, func(*insightJob, string) (string, error) {
 		return `{"summary":"Две вещи на аукцион.","items":[{"item_id":765,"verdict":"auction","reason":"Травники платят 40 медяков."},{"item_id":4562,"verdict":"auction","reason":"Топор берут за 2,5 золотых."}]}`, nil
 	})
@@ -414,6 +439,82 @@ func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
 	if p := runs(); len(p) != 2 || !strings.Contains(p[1], "no prices available") {
 		t.Fatal("without auction data the prompt says so")
 	}
+
+	// Without a stored client the card hears why there are no prices.
+	forgetBattleNetClient()
+	req.Market, req.Key = &marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}, "WARLOCK:10:2-3"
+	e.request(req)
+	if data := until(func(d bagsData) bool { return d.PricesOff != "" }); data.PricesOff != "setup" || len(data.Prices) != 0 {
+		t.Fatalf("the card is told prices are not set up: %+v", data)
+	}
+}
+
+func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
+	fakeBattleNet(t)
+	wago := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(wago.Close)
+	oldBuilds := wagoBuildsURL
+	wagoBuildsURL = wago.URL + "/api/builds"
+	t.Cleanup(func() { wagoBuildsURL = oldBuilds })
+
+	dir := filepath.Join(t.TempDir(), "auctions")
+	now := time.Now()
+	w := testWatcher(dir, now)
+	id, secret := "client", "secret"
+	w.bn.client = func() (string, string, bool) { return id, secret, id != "" }
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	if err := recordMarket(dir, m, now); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	w.refresh(ctx)
+	status := loadAuctionStatus(dir)
+	if _, err := os.Stat(filepath.Join(dir, "eu-114.json")); err != nil || status.Refused != "" || len(status.Failing) != 0 || !strings.Contains(status.Items, "404") {
+		t.Fatalf("the house is downloaded and the failing item table noted: %+v %v", status, err)
+	}
+
+	// Another client in the menu does not go on with the old one's token, and a refusal is noted for the tools.
+	id, secret = "other", "wrong"
+	w.refresh(ctx)
+	if status := loadAuctionStatus(dir); !strings.Contains(status.Refused, "401") {
+		t.Fatalf("a refused client is noted: %+v", status)
+	}
+
+	// Without a client the token is dropped at once and nothing is noted any more.
+	id, secret = "client", "secret"
+	w.refresh(ctx)
+	id = ""
+	w.refresh(ctx)
+	if status := loadAuctionStatus(dir); w.bn.token != "" || status.Refused != "" || status.Items != "" {
+		t.Fatalf("turned off: %q %+v", w.bn.token, status)
+	}
+}
+
+func TestBattleNetClientIsCheckedAndStored(t *testing.T) {
+	fakeBattleNet(t)
+	ctx := context.Background()
+	if err := checkBattleNetClient(ctx, "client", "wrong"); !errors.Is(err, errBattleNetRefused) {
+		t.Fatal("a wrong secret is refused:", err)
+	}
+	if err := checkBattleNetClient(ctx, "client", "secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := battleNetClient(); ok {
+		t.Fatal("nothing is stored before the menu saves it")
+	}
+	useBattleNetClient(t)
+	if id, secret, ok := battleNetClient(); !ok || id != "client" || secret != "secret" {
+		t.Fatal("the stored client is read back:", id, ok)
+	}
+	if err := forgetBattleNetClient(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := battleNetClient(); ok {
+		t.Fatal("a removed client is gone")
+	}
+	if err := forgetBattleNetClient(); err != nil {
+		t.Fatal("removing it again is no error:", err)
+	}
 }
 
 func TestANullUpgradeAnswerIsRefused(t *testing.T) {
@@ -466,6 +567,7 @@ func TestItemTableKeepsGearOfTheNewestBuildAndChecksDaily(t *testing.T) {
 }
 
 func TestAuctionUpgradesAskTheGameAboutTheSlotsCandidates(t *testing.T) {
+	useBattleNetClient(t)
 	root := t.TempDir()
 	dir := filepath.Join(root, "snapshots")
 	auctions := auctionDir(dir)

@@ -16,6 +16,12 @@ func processPaths() []string { return nil }
 
 func chooseFolder() (string, error) { return "", errors.ErrUnsupported }
 
+func askText(string, bool) (string, bool) { return "", false }
+
+func tell(string) {}
+
+func confirm(string) bool { return false }
+
 func openURL(url string) {
 	cmd := exec.Command("xdg-open", url)
 	if cmd.Start() == nil {

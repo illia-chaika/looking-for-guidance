@@ -107,6 +107,49 @@ func chooseFolder() (string, error) {
 	return path, err
 }
 
+// The dialogs read their texts from the environment, so nothing in them needs quoting for PowerShell.
+const askScript = `[Console]::OutputEncoding = [Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+$f = New-Object System.Windows.Forms.Form
+$f.Text = 'Looking for Guidance'; $f.TopMost = $true; $f.StartPosition = 'CenterScreen'
+$f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; $f.MinimizeBox = $false
+$f.ClientSize = [System.Drawing.Size]::new(460, 170)
+$l = New-Object System.Windows.Forms.Label; $l.Text = $env:LFG_TEXT; $l.SetBounds(12, 12, 436, 84)
+$t = New-Object System.Windows.Forms.TextBox; $t.SetBounds(12, 100, 436, 24); $t.UseSystemPasswordChar = $env:LFG_HIDDEN -eq '1'
+$ok = New-Object System.Windows.Forms.Button; $ok.Text = 'OK'; $ok.DialogResult = 'OK'; $ok.SetBounds(262, 134, 90, 28)
+$no = New-Object System.Windows.Forms.Button; $no.Text = $env:LFG_CANCEL; $no.DialogResult = 'Cancel'; $no.SetBounds(358, 134, 90, 28)
+$f.Controls.AddRange(@($l, $t, $ok, $no)); $f.AcceptButton = $ok; $f.CancelButton = $no
+$f.Add_Shown({ $f.Activate(); $t.Focus() })
+if ($f.ShowDialog() -eq 'OK') { 'OK:' + $t.Text }`
+
+const messageScript = `Add-Type -AssemblyName System.Windows.Forms
+$owner = New-Object System.Windows.Forms.Form -Property @{TopMost = $true; Text = 'Looking for Guidance'}
+[System.Windows.Forms.MessageBox]::Show($owner, $env:LFG_TEXT, 'Looking for Guidance', $env:LFG_BUTTONS)`
+
+func dialog(script string, env ...string) string {
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-Command", script)
+	cmd.Env = append(os.Environ(), env...)
+	hideWindow(cmd)
+	out, _ := cmd.Output()
+	return strings.TrimSpace(string(out))
+}
+
+// askText asks for one line of text; a hidden one is typed as dots. False means the player cancelled.
+func askText(prompt string, hidden bool) (string, bool) {
+	flag := "0"
+	if hidden {
+		flag = "1"
+	}
+	text, ok := strings.CutPrefix(dialog(askScript, "LFG_TEXT="+prompt, "LFG_HIDDEN="+flag, "LFG_CANCEL="+tr("Cancel")), "OK:")
+	return text, ok
+}
+
+func tell(message string) { dialog(messageScript, "LFG_TEXT="+message, "LFG_BUTTONS=OK") }
+
+func confirm(message string) bool {
+	return dialog(messageScript, "LFG_TEXT="+message, "LFG_BUTTONS=OKCancel") == "OK"
+}
+
 func openURL(url string) {
 	cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url)
 	hideWindow(cmd)

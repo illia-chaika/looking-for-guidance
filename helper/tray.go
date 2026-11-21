@@ -43,6 +43,7 @@ func (a *app) trayReady() {
 	useCodex := adviser.AddSubMenuItemCheckbox("Codex", "", a.view().provider != "claude")
 	useClaude := adviser.AddSubMenuItemCheckbox("Claude Code", "", a.view().provider == "claude")
 	runWith := systray.AddMenuItemCheckbox(tr("Start with WoW"), tr("Start the companion together with the game"), a.view().runWithWoW)
+	prices := systray.AddMenuItemCheckbox(tr("Auction prices"), tr("Asking prices on your auction house, read with your own Battle.net API client"), false)
 	choose := systray.AddMenuItem(tr("Choose the WoW folder…"), "")
 	choose.Hide()
 	retryAccess := systray.AddMenuItem(tr("Retry access to the WoW folder"), "")
@@ -80,6 +81,7 @@ func (a *app) trayReady() {
 		} else {
 			runWith.Uncheck()
 		}
+		check(prices, v.auctions)
 		update.SetTitle(updateTitle(v))
 		visible(update, v.update != "")
 		enabled(update, v.updating == updateReady || v.updating == updateFailed)
@@ -94,6 +96,7 @@ func (a *app) trayReady() {
 	}
 	go a.loop()
 	go a.watchAuctions()
+	go a.noteAuctionClient()
 	go a.checkUpdates()
 
 	for {
@@ -102,6 +105,8 @@ func (a *app) trayReady() {
 			return
 		case <-runWith.ClickedCh:
 			a.setRunWithWoW(!a.view().runWithWoW)
+		case <-prices.ClickedCh:
+			go a.toggleAuctions()
 		case <-retryAccess.ClickedCh:
 			a.requestVolumeRetry()
 		case <-choose.ClickedCh:

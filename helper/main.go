@@ -117,6 +117,7 @@ type app struct {
 	stageDir            string
 	leftovers           []string
 	checking            updateCheck
+	auctions            bool // a Battle.net API client is stored
 	show                func(trayView)
 	shown               trayView
 
@@ -131,6 +132,7 @@ type trayView struct {
 	alert, signIn          bool
 	installOther           bool
 	choose, runWithWoW     bool
+	auctions               bool
 	install, retryAccess   bool
 	check                  updateCheck
 	updating               updateStage
@@ -372,7 +374,7 @@ func (a *app) view() trayView {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	v := trayView{update: a.updateVer, updating: a.updateStage, runWithWoW: a.settings.RunWithWoW, detail: a.problem, check: a.checking,
-		provider: a.settings.Provider, installName: "Codex CLI"}
+		provider: a.settings.Provider, installName: "Codex CLI", auctions: a.auctions}
 	if v.provider == "claude" {
 		v.installName = "Claude Code"
 	}

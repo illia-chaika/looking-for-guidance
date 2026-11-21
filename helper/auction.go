@@ -21,7 +21,7 @@ import (
 
 // The auction house of the player's market, from Blizzard's Game Data API. The tray downloads the houses the game
 // reported recently and keeps a short summary per item; the game data server reads it for get_auction_prices.
-// Nothing happens without the player's own Battle.net API client in the keychain (battleNetClient).
+// Nothing happens without the player's own Battle.net API client in the credential store (battleNetClient).
 
 const (
 	battleNetAccount       = "battlenet"
@@ -40,7 +40,8 @@ var (
 	battleNetTokenURL = "https://oauth.battle.net/token"
 	battleNetAPI      = func(region string) string { return "https://" + region + ".api.blizzard.com" }
 
-	errNoBattleNetClient = errors.New("no Battle.net API client in the keychain")
+	errNoBattleNetClient = errors.New("no Battle.net API client is set up")
+	errBattleNetRefused  = errors.New("Battle.net refused the API client")
 
 	// auctionWake asks the tray's watcher to look now, when the game reports a market it has not downloaded yet.
 	auctionWake = make(chan struct{}, 1)
@@ -249,6 +250,7 @@ type battleNet struct {
 	client  func() (id, secret string, ok bool)
 	http    *http.Client
 	now     func() time.Time
+	id      string // the client the token was issued to
 	token   string
 	expires time.Time
 }
@@ -276,8 +278,11 @@ func (b *battleNet) bearer(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+		return "", fmt.Errorf("%w: %s", errBattleNetRefused, resp.Status)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Battle.net refused the API client: %s", resp.Status)
+		return "", fmt.Errorf("Battle.net token service answered %s", resp.Status)
 	}
 	var answer struct {
 		Token   string `json:"access_token"`
@@ -286,7 +291,7 @@ func (b *battleNet) bearer(ctx context.Context) (string, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&answer); err != nil || answer.Token == "" {
 		return "", fmt.Errorf("Battle.net sent no token: %v", err)
 	}
-	b.token, b.expires = answer.Token, b.now().Add(time.Duration(answer.Expires)*time.Second-10*time.Minute)
+	b.id, b.token, b.expires = id, answer.Token, b.now().Add(time.Duration(answer.Expires)*time.Second-10*time.Minute)
 	return b.token, nil
 }
 
@@ -529,15 +534,58 @@ func recentMarkets(dir string, now time.Time) []auctionMarket {
 	return out
 }
 
+// auctionStatus is what the watcher met last time, so that the tools and the journal can say why prices are missing.
+type auctionStatus struct {
+	Refused string            `json:"refused,omitempty"` // Blizzard's answer when it turned the client down
+	Failing map[string]string `json:"failing,omitempty"` // market key: why its last download failed
+	Items   string            `json:"items,omitempty"`   // why the item table could not be fetched
+}
+
+func loadAuctionStatus(dir string) auctionStatus {
+	var s auctionStatus
+	if data, err := os.ReadFile(filepath.Join(dir, "status.json")); err == nil {
+		json.Unmarshal(data, &s)
+	}
+	return s
+}
+
+func (w *auctionWatcher) saveStatus(s auctionStatus) {
+	data, err := json.Marshal(s)
+	if err == nil {
+		if err = os.MkdirAll(w.dir, 0o700); err == nil {
+			err = writeFileAtomic(filepath.Join(w.dir, "status.json"), data)
+		}
+	}
+	if err != nil {
+		logf("Couldn't note the auction status: %v", err)
+	}
+}
+
 func (w *auctionWatcher) refresh(ctx context.Context) {
+	// Read the client every time: one removed or replaced in the menu must not go on with the old token.
+	id, _, ok := w.bn.client()
+	if !ok || id != w.bn.id {
+		w.bn.token = ""
+	}
+	status := auctionStatus{Failing: map[string]string{}}
+	if !ok {
+		w.saveStatus(status)
+		return
+	}
 	markets := recentMarkets(w.dir, w.now())
 	for _, m := range markets {
 		changed, err := w.update(ctx, m)
 		switch {
 		case errors.Is(err, errNoBattleNetClient):
+			w.saveStatus(auctionStatus{})
+			return
+		case errors.Is(err, errBattleNetRefused):
+			logf("Auction prices: %v", err)
+			w.saveStatus(auctionStatus{Refused: err.Error()})
 			return
 		case err != nil:
 			logf("Auction house %s: %v", m.label(), err)
+			status.Failing[m.key()] = err.Error()
 		case changed:
 			logf("Auction house %s: new snapshot downloaded", m.label())
 		}
@@ -545,8 +593,10 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 	if len(markets) > 0 {
 		if err := w.refreshItems(ctx); err != nil {
 			logf("Item table for auction upgrades: %v", err)
+			status.Items = err.Error()
 		}
 	}
+	w.saveStatus(status)
 }
 
 // watchAuctions runs in the tray for its whole life, with or without the game.

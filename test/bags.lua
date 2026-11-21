@@ -136,6 +136,22 @@ stamp = nil
 for _, r in ipairs(card().rows) do if r.kind == "text" and r.text:find("Blizzard", 1, true) then stamp = r.text end end
 assert(stamp == "Auction prices: Blizzard data from " .. date("%d.%m %H:%M", time() - 2 * 86400) .. ".", "an old one its date too: " .. stamp)
 
+-- Without prices the helper says why, and the card tells the player where to turn them on.
+local function hint(off)
+    payload = CopyTable(payload)
+    payload.rev = payload.rev + 1
+    local d = payload.insights[1].data
+    d.prices, d.prices_at, d.prices_off = nil, nil, off
+    wow.payload = payload
+    T.Sync.Check()
+    for _, r in ipairs(card().rows) do
+        if r.kind == "text" and (r.text:find("Auction prices", 1, true) or r.text:find("Blizzard", 1, true)) then return r.text end
+    end
+end
+assert(hint("setup") == "Auction prices are not set up: choose “Auction prices” in the Looking for Guidance menu.", hint("setup"))
+assert(hint("failing") == "Auction prices are still downloading.", "a failing download reads as still downloading")
+assert(hint("unknown") == nil and hint(nil) == nil, "an unknown code or none shows nothing")
+
 -- A remembered wish wins over the advice to sell.
 T.Store.memory = { character = "Player-1-121A", login = "login", notes = { { scope = "character", topic = "bags", text = "Keep my Linen Cloth for bandages." } } }
 c = card()

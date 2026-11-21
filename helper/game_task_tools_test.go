@@ -68,7 +68,7 @@ func TestTaskToolDiscoveryAndLegacyDispatch(t *testing.T) {
 			}
 		}
 	}
-	want := []string{"get_context", "get_quests", "get_details", "get_talents", "get_equipment", "search_spellbook", "search_bags", "get_skills", "get_recipes", "get_buffs", "get_reputation", "get_attached_links", "get_memory", "upsert_memory", "forget_memory"}
+	want := []string{"get_context", "get_quests", "get_details", "get_talents", "get_equipment", "search_spellbook", "search_bags", "get_skills", "get_recipes", "get_buffs", "get_reputation", "get_attached_links", "get_auction_prices", "find_auction_upgrades", "get_memory", "upsert_memory", "forget_memory"}
 	slices.Sort(names)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {

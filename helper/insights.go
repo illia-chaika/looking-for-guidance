@@ -54,10 +54,11 @@ type insightRequest struct {
 
 // insightEnv is what a job may use besides the add-on's facts.
 type insightEnv struct {
-	Feed    *gameFeed
-	Notes   []string
-	Extra   string       // text of further pages the helper fetched itself
-	Auction *auctionBook // the character's auction house, when the player set up auction prices
+	Feed       *gameFeed
+	Notes      []string
+	Extra      string       // text of further pages the helper fetched itself
+	Auction    *auctionBook // the character's auction house, when the player set up auction prices
+	AuctionOff string       // otherwise why there are none: a code of auctionUnavailable
 }
 
 type insightKind struct {
@@ -238,8 +239,11 @@ func (e *insightEngine) resolve(job *insightJob) {
 		job.env.Notes = e.notes(job.req.Character)
 	}
 	if job.kind.auction && job.req.Market != nil {
-		if m, err := job.req.Market.market(); err == nil {
-			job.env.Auction, _ = loadAuctionBook(filepath.Join(filepath.Dir(e.dir), "auctions", m.key()+".json"))
+		m, err := job.req.Market.market()
+		if problem := auctionProblem(e.dir, m, err); problem != nil {
+			job.env.AuctionOff = problem.Code
+		} else {
+			job.env.Auction, _ = loadAuctionBook(filepath.Join(auctionDir(e.dir), m.key()+".json"))
 		}
 	}
 	now := e.now()

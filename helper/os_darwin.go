@@ -78,6 +78,32 @@ func chooseFolder() (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+// dialog shows an AppleScript dialog with the text as its argument, so nothing in it needs quoting. Cancel ends it with
+// an error.
+func dialog(text, script string) (string, error) {
+	out, err := exec.Command("osascript", "-e", "on run argv", "-e", script, "-e", "end run", text).Output()
+	return strings.TrimSpace(string(out)), err
+}
+
+// askText asks for one line of text; a hidden one is typed as dots. False means the player cancelled.
+func askText(prompt string, hidden bool) (string, bool) {
+	script := `text returned of (display dialog (item 1 of argv) default answer "" with title "Looking for Guidance"`
+	if hidden {
+		script += " with hidden answer"
+	}
+	text, err := dialog(prompt, script+")")
+	return text, err == nil
+}
+
+func tell(message string) {
+	dialog(message, `display dialog (item 1 of argv) with title "Looking for Guidance" buttons {"OK"} default button 1`)
+}
+
+func confirm(message string) bool {
+	_, err := dialog(message, `display dialog (item 1 of argv) with title "Looking for Guidance" default button 2`)
+	return err == nil
+}
+
 func openURL(url string) {
 	cmd := exec.Command("open", url)
 	if cmd.Start() == nil {

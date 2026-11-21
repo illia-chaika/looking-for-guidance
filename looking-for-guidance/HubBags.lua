@@ -9,6 +9,14 @@ local SECTIONS = {
     { "sell", "Продать торговцу" }, { "unusable", "Тебе не подойдёт" }, { "auction", "Выставить на аукцион" },
     { "use", "Использовать сейчас" }, { "bank", "Убрать в банк" }, { "later", "Пригодится позже" }, { "keep", "Оставить" },
 }
+-- Why the helper sent no auction prices, by its code.
+local PRICES_OFF = {
+    setup = "Цены аукциона не настроены: выбери «Цены аукциона» в меню Looking for Guidance.",
+    refused = "Blizzard не принимает сохранённый API-клиент Battle.net: выключи и снова включи «Цены аукциона» в меню Looking for Guidance.",
+    market = "Blizzard не публикует цены аукциона для рынка этого персонажа.",
+    pending = "Цены аукциона ещё загружаются.",
+}
+PRICES_OFF.failing = PRICES_OFF.pending
 
 -- The scan reads a tooltip per slot, so it runs only for an opened card or an open merchant window, and only after bags changed.
 local active, merchant, dirty, cache = false, false, true, nil
@@ -222,6 +230,8 @@ Hub.Extend("bags", {
             if next(prices) and found.data.prices_at then
                 rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail",
                     text = L("Цены аукциона — снимок Blizzard от {1}.", date(time() - found.data.prices_at > 12 * 3600 and "%d.%m %H:%M" or "%H:%M", found.data.prices_at)) }
+            elseif PRICES_OFF[found.data.prices_off] then
+                rows[#rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L(PRICES_OFF[found.data.prices_off]) }
             end
             rows[#rows + 1] = { kind = "sources", list = {}, at = found.at }
         elseif key then

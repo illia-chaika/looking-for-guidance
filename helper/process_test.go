@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zalando/go-keyring"
 )
 
 func TestMain(m *testing.M) {
@@ -62,6 +64,10 @@ func TestMain(m *testing.M) {
 		for {
 			time.Sleep(time.Hour)
 		}
+	}
+	// Only the live checks read the player's real Battle.net client; the rest keep it in memory.
+	if os.Getenv("FOREVER_AUCTION") == "" && os.Getenv("FOREVER_LIVE") == "" {
+		keyring.MockInit()
 	}
 	os.Exit(m.Run())
 }

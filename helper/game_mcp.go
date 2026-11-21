@@ -42,12 +42,12 @@ func gameTools(dir string) []mcpObject {
 	for _, t := range entryTools {
 		tools = append(tools, tool(t.name, t.description+" "+pageHelp, t.properties(), []string{"snapshot_id"}))
 	}
-	if auctionReady(dir) {
-		tools = append(tools, tool("get_auction_prices", "Read current asking prices on this character's own auction house: lowest buyout per unit in copper, quantity on sale, cheapest price levels and the cost of buying a quantity, with the snapshot's time. Pass item IDs; pass a carried item's exact link to price that random-suffix variant. Use before advising a purchase or a sale.",
-			auctionToolSchema(), []string{"snapshot_id", "items"}))
-		tools = append(tools, tool("find_auction_upgrades", "Search this character's own auction house for one equipment slot within a budget. The running game drops what the character cannot wear and returns the strongest candidates with their exact stats and asking prices, and the stats of what is worn there now; weigh them for the class. Takes up to a minute.",
-			upgradeToolSchema(), []string{"snapshot_id", "slot", "budget"}))
-	}
+	// Both are always offered, so that without prices the adviser hears why and what the player can do.
+	unavailable := " When there are no prices it answers available:false with the reason and what_to_do; tell the player both in their language."
+	tools = append(tools, tool("get_auction_prices", "Read current asking prices on this character's own auction house: lowest buyout per unit in copper, quantity on sale, cheapest price levels and the cost of buying a quantity, with the snapshot's time. Pass item IDs; pass a carried item's exact link to price that random-suffix variant. Use before advising a purchase or a sale."+unavailable,
+		auctionToolSchema(), []string{"snapshot_id", "items"}))
+	tools = append(tools, tool("find_auction_upgrades", "Search this character's own auction house for one equipment slot within a budget. The running game drops what the character cannot wear and returns the strongest candidates with their exact stats and asking prices, and the stats of what is worn there now; weigh them for the class. Takes up to a minute."+unavailable,
+		upgradeToolSchema(), []string{"snapshot_id", "slot", "budget"}))
 	noteID := mcpObject{"type": "string", "pattern": memoryKey.String(), "description": "Stable semantic key for one agreement, e.g. leveling-plan"}
 	revision := mcpObject{"type": "integer", "minimum": 0, "description": "Current revision returned by get_memory; zero only for a new note"}
 	quote := mcpObject{"type": "string", "minLength": 1, "maxLength": 400, "description": "Exact supporting words from the current player message"}

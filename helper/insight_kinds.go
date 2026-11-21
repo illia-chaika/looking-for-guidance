@@ -542,8 +542,9 @@ type bagsData struct {
 	Summary string       `json:"summary"`
 	Items   []bagVerdict `json:"items"`
 	// Current asking prices for the judged items and for those the client ruled out itself, added when shown.
-	Prices   []bagPrice `json:"prices,omitempty"`
-	PricesAt int64      `json:"prices_at,omitempty"`
+	Prices    []bagPrice `json:"prices,omitempty"`
+	PricesAt  int64      `json:"prices_at,omitempty"`
+	PricesOff string     `json:"prices_off,omitempty"` // why there are none, for the card to say
 }
 
 type bagPrice struct {
@@ -680,12 +681,16 @@ var bagsKind = &insightKind{
 	decorate: func(data json.RawMessage, req insightRequest, env insightEnv) json.RawMessage {
 		var answer bagsData
 		var facts bagFacts
-		if env.Auction == nil || json.Unmarshal(data, &answer) != nil || readFacts(req, &facts) != nil {
+		if (env.Auction == nil && env.AuctionOff == "") || json.Unmarshal(data, &answer) != nil || readFacts(req, &facts) != nil {
 			return data
 		}
-		answer.Prices = bagPrices(env.Auction, facts)
-		if at := env.Auction.modifiedAt(); !at.IsZero() {
-			answer.PricesAt = at.Unix()
+		if env.Auction == nil {
+			answer.PricesOff = env.AuctionOff
+		} else {
+			answer.Prices = bagPrices(env.Auction, facts)
+			if at := env.Auction.modifiedAt(); !at.IsZero() {
+				answer.PricesAt = at.Unix()
+			}
 		}
 		if out, err := json.Marshal(answer); err == nil {
 			return out

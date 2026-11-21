@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,7 +17,6 @@ const (
 	maxAuctionItems    = 50
 	auctionShownTiers  = 5
 	auctionStaleAfter  = 6 * time.Hour
-	auctionOfferedFor  = 48 * time.Hour
 	auctionToolMessage = "Asking prices on this character's own auction house from Blizzard's snapshot: lowest buyout per unit in copper and the quantity on sale. They are not sale prices; a non-commodity stack is bought whole."
 )
 
@@ -32,16 +32,45 @@ func auctionToolSchema() mcpObject {
 	}
 }
 
-// auctionReady tells whether this computer keeps auction data current; without it the tools are not offered. A
-// summary's file time is when the tray last confirmed it, so a client removed from the keychain ends the offer.
-func auctionReady(dir string) bool {
-	books, _ := filepath.Glob(filepath.Join(auctionDir(dir), "*-*.json"))
-	for _, book := range books {
-		if info, err := os.Stat(book); err == nil && time.Since(info.ModTime()) < auctionOfferedFor {
-			return true
-		}
+// auctionUnavailable is why the auction tools have no prices to give and what the player can do about it. The tools
+// answer with it as JSON for the adviser to retell in the player's language; the journal shows its code.
+type auctionUnavailable struct {
+	Code     string // setup, refused, market, failing or pending
+	Reason   string
+	WhatToDo string
+}
+
+func (u *auctionUnavailable) Error() string {
+	data, _ := json.Marshal(mcpObject{"available": false, "code": u.Code, "reason": u.Reason, "what_to_do": u.WhatToDo})
+	return string(data)
+}
+
+const auctionSetUp = "In the Looking for Guidance menu (its icon in the menu bar on macOS, in the notification area on Windows) choose Auction prices. It opens develop.battle.net, where the player creates a free API client, and asks for that client's ID and secret. Prices follow a few minutes after the next question in the game."
+
+// auctionProblem tells why the market has no prices to read, or nil when its summary is there. dir is any folder
+// beside the auctions one, such as the snapshots or the journal's.
+func auctionProblem(dir string, m auctionMarket, marketErr error) *auctionUnavailable {
+	if _, _, ok := battleNetClient(); !ok {
+		return &auctionUnavailable{"setup", "Auction prices are not set up: the companion has no Battle.net API client.", auctionSetUp}
 	}
-	return false
+	if marketErr != nil {
+		return &auctionUnavailable{"market", "There are no auction prices for this: " + marketErr.Error() + ".",
+			"Nothing to set up in the companion; advise without auction prices."}
+	}
+	status := loadAuctionStatus(auctionDir(dir))
+	if status.Refused != "" {
+		return &auctionUnavailable{"refused", status.Refused + ": the stored client ID or secret no longer works.",
+			"In the Looking for Guidance menu choose Auction prices to turn them off, then choose it again and enter the ID and secret of a working client from develop.battle.net. A deleted client or a reset secret stops working."}
+	}
+	if _, err := os.Stat(filepath.Join(auctionDir(dir), m.key()+".json")); err == nil {
+		return nil
+	}
+	if why := status.Failing[m.key()]; why != "" {
+		return &auctionUnavailable{"failing", fmt.Sprintf("Downloading the %s auction house fails: %s.", m.label(), why),
+			"The companion tries again every 20 minutes. Nothing to do unless it lasts; then the cause is in helper.log."}
+	}
+	return &auctionUnavailable{"pending", fmt.Sprintf("The first snapshot of the %s auction house is still downloading.", m.label()),
+		"Ask again in a few minutes."}
 }
 
 type auctionArgs struct {
@@ -66,13 +95,11 @@ func queryAuctionPrices(dir string, raw []byte) (mcpObject, error) {
 		return nil, err
 	}
 	m, err := snapshotMarket(s)
-	if err != nil {
-		return nil, errors.New("auction prices are unavailable for this question: " + err.Error())
+	if problem := auctionProblem(dir, m, err); problem != nil {
+		return nil, problem
 	}
 	book, err := loadAuctionBook(filepath.Join(auctionDir(dir), m.key()+".json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("no snapshot of the %s auction house has been downloaded yet; the companion fetches it within minutes of the game reporting the market", m.label())
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 	fetched := time.UnixMilli(book.Fetched).UTC()

@@ -241,16 +241,20 @@ func queryAuctionUpgrades(dir string, raw json.RawMessage) (mcpObject, error) {
 		return nil, err
 	}
 	m, err := snapshotMarket(s)
-	if err != nil {
-		return nil, errors.New("auction prices are unavailable for this question: " + err.Error())
+	if problem := auctionProblem(dir, m, err); problem != nil {
+		return nil, problem
 	}
 	book, err := loadAuctionBook(filepath.Join(auctionDir(dir), m.key()+".json"))
 	if err != nil {
-		return nil, fmt.Errorf("no snapshot of the %s auction house is available yet", m.label())
+		return nil, err
 	}
 	items, err := loadItemTable(auctionDir(dir))
 	if err != nil {
-		return nil, errors.New("the item table is not downloaded yet; the companion fetches it with the auction data")
+		if why := loadAuctionStatus(auctionDir(dir)).Items; why != "" {
+			return nil, &auctionUnavailable{"failing", "Downloading the item table for upgrade searches fails: " + why + ".",
+				"The companion tries again every 20 minutes; meanwhile get_auction_prices still works for named items."}
+		}
+		return nil, &auctionUnavailable{"pending", "The item table for upgrade searches is still downloading.", "Ask again in a few minutes."}
 	}
 	if !s.Lookup || s.RunID == "" || s.Session == "" {
 		return nil, errors.New("this snapshot has no live lookup; ask in the running game")

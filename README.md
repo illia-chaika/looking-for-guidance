@@ -21,7 +21,7 @@ before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
 searches current sources before answering. Shift-click items, spells and quests into the message. Each character has
 its own conversations and its own memory of decisions ("I am saving for the mount", "keep the linen").
 
-**Auction prices** (optional, macOS). With your own Battle.net API client in the keychain (see
+**Auction prices** (optional). With your own free Battle.net API client, set up from the companion's menu (see
 [Auction prices](#auction-prices)), the adviser can look up asking prices on your character's auction house before
 it tells you to buy or sell something there, and search your market for an upgrade for one equipment slot within
 a budget.
@@ -163,26 +163,51 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 
 ### Auction prices
 
-Blizzard serves WoW: Forever's auction houses through its Game Data API, about once an hour. To let the adviser read
-them, create an API client at <https://develop.battle.net/access/clients> and put its ID and secret into the macOS
-keychain; each command asks for the value without echoing it:
+Blizzard serves WoW: Forever's auction houses through its Game Data API, about once an hour. To read them the
+companion needs your own API client, which is free. Setting it up is the same on macOS and Windows (where, like the
+rest of the Windows build, it has not been tried yet):
 
-```sh
-security add-generic-password -U -s lfg-battlenet-id -a battlenet -w
-security add-generic-password -U -s lfg-battlenet-secret -a battlenet -w
-```
+1. Choose *Auction prices* in the companion's menu (its menu bar icon on macOS, its icon in the notification area on
+   Windows). Your browser opens <https://develop.battle.net/access/clients>: sign in with your Battle.net account and
+   create a client there.
+2. The companion asks for the client's ID, then for its secret, which is typed as dots. It asks Blizzard whether the
+   two work and stores them only if they do.
+3. Ask anything in the game. The add-on reports your region, ruleset and faction with each question, and the
+   companion downloads that auction house within a few minutes.
 
-The add-on reports your region, ruleset and faction with each question. While it runs, the companion then checks
-every market the game reported in the past week every 20 minutes and downloads it when Blizzard has a newer
-snapshot. It keeps a summary in `~/Library/Application Support/Looking for Guidance/auctions/` and a price history
-for 90 days (about 1 MB a day per market, compressed), and offers the adviser two tools: `get_auction_prices` for
-the price of named items, and `find_auction_upgrades`, which picks the auctions for one equipment slot within a
-budget and lets the running game drop what the character cannot wear and read each candidate's exact stats. For that
-search the companion also keeps the game's item table from wago.tools, checked once a day.
+A check mark next to *Auction prices* means a client is stored. The ID and secret are kept in the system's credential
+store, never in a file:
 
-Normal and PvP markets are known. Which auction house serves each Roleplay ruleset is not known yet, and hardcore
-characters trade on a market the API does not list, so those characters get no prices. Remove the two keychain items
-to switch it off: downloads stop, and the tools are no longer offered once the last snapshot is two days old.
+- macOS: the login keychain, items `lfg-battlenet-id` and `lfg-battlenet-secret` with the account `battlenet`. Items
+  made with the `security` commands that earlier versions asked for keep working.
+- Windows: Credential Manager, under Windows Credentials, as the generic credentials `lfg-battlenet-id:battlenet` and
+  `lfg-battlenet-secret:battlenet`.
+
+While it runs, the companion checks every market the game reported in the past week every 20 minutes and downloads
+it when Blizzard has a newer snapshot. It keeps a summary in the `auctions` folder beside `settings.json`
+(`~/Library/Application Support/Looking for Guidance/auctions/` on macOS, `%AppData%\Looking for Guidance\auctions\`
+on Windows) and a price history for 90 days (about 1 MB a day per market, compressed), and offers the adviser two
+tools: `get_auction_prices` for the price of named items, and `find_auction_upgrades`, which picks the auctions for one
+equipment slot within a budget and lets the running game drop what the character cannot wear and read each
+candidate's exact stats. For that search the companion also keeps the game's item table from wago.tools, checked once
+a day.
+
+To see that it works, look for `Auction house EU Normal Horde (house 114): new snapshot downloaded`, with your own
+market, in `helper.log` beside `settings.json`; the journal's Bags section then shows prices with the snapshot's time.
+
+Without prices nothing breaks. The adviser always has both tools, and they answer with the reason and what to do,
+which the adviser passes on in your language; the Bags section says it in one line. The reasons are:
+
+- No client is set up: choose *Auction prices*.
+- Blizzard no longer accepts the stored client, as after deleting it or resetting its secret: choose *Auction prices*
+  twice, to turn it off and to set it up again with a working client.
+- The character's market has no data in the API. Normal and PvP markets are known; which auction house serves each
+  Roleplay ruleset is not known yet, and hardcore characters trade on a market the API does not list.
+- The first download is still running, or failing; the companion tries again every 20 minutes and `helper.log` says
+  why.
+
+To switch it off, choose *Auction prices* again and confirm: the companion removes the client from the credential
+store and stops downloading. Prices already downloaded stay on your disk.
 
 ## Known issues
 
@@ -233,9 +258,10 @@ Three checks talk to the real world and are off by default:
 - `FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper` runs one journal research job against the real
   agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too). It spends allowance.
   Add `FOREVER_LIVE_AGENT=claude` to run it through Claude Code, and `FOREVER_MARKET="EU PvE Horde"` to give the
-  `bags` job a real auction house first (needs the Battle.net client in the keychain).
+  `bags` job a real auction house first (needs the Battle.net client stored through *Auction prices*).
 - `FOREVER_AUCTION="EU PvE Horde" go test -run TestLiveAuction -v ./helper` downloads that auction house with the
-  keychain's Battle.net client and checks the summary.
+  Battle.net client stored through *Auction prices* and checks the summary. The other tests keep their client in
+  memory and never touch the credential store.
 - `FOREVER_FRAMES=/Volumes/GameDisk go test -run TestFrameSoak -v ./helper` writes `AddOns.txt` to a temporary
   folder on that disk the way the game does and reads it with the companion's own watcher.
 
