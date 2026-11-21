@@ -116,8 +116,9 @@ Code with a Claude plan, or the Codex CLI with a ChatGPT plan.
 2. Pick the game folder from its menu bar icon and let it install the add-on.
 3. In the game, type `/ask`.
 
-The app looks for a new version once a day and installs it while the game is closed. To build it yourself, see
-[Development](#development).
+The app looks for a new version once a day, or when you choose *Check for Updates…* in its menu, and installs it
+while the game is closed. Versions 0.10.0 and 0.10.1 never check: download the current one once by hand. To build it
+yourself, see [Development](#development).
 
 **On Windows (experimental).** The Windows download is built from the same code but has never been run on Windows,
 so expect problems, and please report what you find in an

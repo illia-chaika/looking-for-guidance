@@ -113,6 +113,42 @@ var menuTexts = map[string][10]string{
 		"Войти в Claude Code…", "Bei Claude Code anmelden…", "Se connecter à Claude Code…", "Iniciar sesión en Claude Code…",
 		"Entrar no Claude Code…", "Claude Code에 로그인…", "登录 Claude Code…", "登入 Claude Code…",
 		"Accedi a Claude Code…", "Увійти в Claude Code…"},
+	"Check for Updates…": {
+		"Проверить обновления…", "Nach Updates suchen…", "Rechercher des mises à jour…", "Buscar actualizaciones…",
+		"Procurar atualizações…", "업데이트 확인…", "检查更新…", "檢查更新…",
+		"Controlla aggiornamenti…", "Перевірити оновлення…"},
+	"Checking for Updates…": {
+		"Проверяю обновления…", "Suche nach Updates…", "Recherche de mises à jour…", "Buscando actualizaciones…",
+		"Procurando atualizações…", "업데이트 확인 중…", "正在检查更新…", "正在檢查更新…",
+		"Controllo degli aggiornamenti…", "Перевіряю оновлення…"},
+	"Looking for Guidance %s is up to date": {
+		"Looking for Guidance %s — последняя версия", "Looking for Guidance %s ist aktuell",
+		"Looking for Guidance %s est à jour", "Looking for Guidance %s está actualizado",
+		"O Looking for Guidance %s está atualizado", "Looking for Guidance %s: 최신 버전",
+		"Looking for Guidance %s 已是最新版本", "Looking for Guidance %s 已是最新版本",
+		"Looking for Guidance %s è aggiornato", "Looking for Guidance %s — остання версія"},
+	"Downloading Looking for Guidance %s…": {
+		"Загружаю Looking for Guidance %s…", "Lade Looking for Guidance %s herunter…",
+		"Téléchargement de Looking for Guidance %s…", "Descargando Looking for Guidance %s…",
+		"Baixando o Looking for Guidance %s…", "Looking for Guidance %s 다운로드 중…",
+		"正在下载 Looking for Guidance %s…", "正在下載 Looking for Guidance %s…",
+		"Download di Looking for Guidance %s…", "Завантажую Looking for Guidance %s…"},
+	"Install %s and Restart": {
+		"Установить %s и перезапустить", "%s installieren und neu starten", "Installer %s et redémarrer",
+		"Instalar %s y reiniciar", "Instalar %s e reiniciar", "%s 설치 후 다시 시작", "安装 %s 并重新启动", "安裝 %s 並重新啟動",
+		"Installa %s e riavvia", "Встановити %s і перезапустити"},
+	"Installing Looking for Guidance %s…": {
+		"Устанавливаю Looking for Guidance %s…", "Installiere Looking for Guidance %s…",
+		"Installation de Looking for Guidance %s…", "Instalando Looking for Guidance %s…",
+		"Instalando o Looking for Guidance %s…", "Looking for Guidance %s 설치 중…",
+		"正在安装 Looking for Guidance %s…", "正在安裝 Looking for Guidance %s…",
+		"Installazione di Looking for Guidance %s…", "Встановлюю Looking for Guidance %s…"},
+	"Update Failed: Download %s from GitHub…": {
+		"Обновление не удалось: скачать %s с GitHub…", "Update fehlgeschlagen: %s von GitHub laden…",
+		"Échec de la mise à jour : télécharger %s depuis GitHub…", "La actualización falló: descargar %s de GitHub…",
+		"A atualização falhou: baixar %s do GitHub…", "업데이트 실패: GitHub에서 %s 다운로드…",
+		"更新失败：从 GitHub 下载 %s…", "更新失敗：從 GitHub 下載 %s…",
+		"Aggiornamento non riuscito: scarica %s da GitHub…", "Оновлення не вдалося: завантажити %s з GitHub…"},
 }
 
 var menuLanguage = sync.OnceValue(func() string {

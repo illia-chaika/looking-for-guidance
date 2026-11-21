@@ -48,6 +48,10 @@ func (a *app) trayReady() {
 	retryAccess := systray.AddMenuItem(tr("Retry access to the WoW folder"), "")
 	retryAccess.Hide()
 	systray.AddSeparator()
+	// The first shows a newer version on its way in; the second asks GitHub now instead of at the daily check.
+	update := systray.AddMenuItem("", "")
+	update.Hide()
+	checkUpdates := systray.AddMenuItem(tr("Check for Updates…"), "")
 	quit := systray.AddMenuItem(tr("Quit Looking for Guidance"), "")
 
 	a.mu.Lock()
@@ -76,6 +80,11 @@ func (a *app) trayReady() {
 		} else {
 			runWith.Uncheck()
 		}
+		update.SetTitle(updateTitle(v))
+		visible(update, v.update != "")
+		enabled(update, v.updating == updateReady || v.updating == updateFailed)
+		checkUpdates.SetTitle(checkTitle(v))
+		enabled(checkUpdates, v.check != checkRunning && v.updating != updateDownloading && v.updating != updateInstalling)
 	}
 	runWithWoW := a.settings.RunWithWoW
 	a.mu.Unlock()
@@ -85,6 +94,7 @@ func (a *app) trayReady() {
 	}
 	go a.loop()
 	go a.watchAuctions()
+	go a.checkUpdates()
 
 	for {
 		select {
@@ -110,6 +120,18 @@ func (a *app) trayReady() {
 			} else {
 				a.signIn()
 			}
+		case <-update.ClickedCh:
+			a.mu.Lock()
+			stage, page := a.updateStage, a.updateURL
+			a.mu.Unlock()
+			switch stage {
+			case updateReady:
+				go a.installUpdate(true)
+			case updateFailed:
+				openURL(page)
+			}
+		case <-checkUpdates.ClickedCh:
+			a.requestUpdateCheck()
 		case <-useCodex.ClickedCh:
 			a.setProvider("")
 		case <-useClaude.ClickedCh:
@@ -124,13 +146,32 @@ func (a *app) trayReady() {
 func updateTitle(v trayView) string {
 	switch v.updating {
 	case updateDownloading:
-		return "Downloading Looking for Guidance " + v.update + "…"
+		return tr("Downloading Looking for Guidance %s…", v.update)
 	case updateReady:
-		return "Install " + v.update + " and Restart"
+		return tr("Install %s and Restart", v.update)
 	case updateInstalling:
-		return "Installing Looking for Guidance " + v.update + "…"
+		return tr("Installing Looking for Guidance %s…", v.update)
 	default:
-		return "Update Failed: Download " + v.update + " from GitHub…"
+		return tr("Update Failed: Download %s from GitHub…", v.update)
+	}
+}
+
+func checkTitle(v trayView) string {
+	switch v.check {
+	case checkRunning:
+		return tr("Checking for Updates…")
+	case checkUpToDate:
+		return tr("Looking for Guidance %s is up to date", version)
+	default:
+		return tr("Check for Updates…")
+	}
+}
+
+func enabled(item *systray.MenuItem, on bool) {
+	if on {
+		item.Enable()
+	} else {
+		item.Disable()
 	}
 }
 

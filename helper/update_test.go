@@ -44,6 +44,29 @@ func TestNewerVersion(t *testing.T) {
 	}
 }
 
+func TestUpdateMenuTitles(t *testing.T) {
+	old := version
+	version = "0.3.0"
+	t.Cleanup(func() { version = old })
+	for _, c := range []struct {
+		v           trayView
+		update, chk string
+	}{
+		{trayView{}, "", "Проверить обновления…"},
+		{trayView{check: checkRunning}, "", "Проверяю обновления…"},
+		{trayView{check: checkUpToDate}, "", "Looking for Guidance 0.3.0 — последняя версия"},
+		{trayView{update: "0.4.0", updating: updateInstalling}, "Устанавливаю Looking for Guidance 0.4.0…", "Проверить обновления…"},
+		{trayView{update: "0.4.0", updating: updateFailed}, "Обновление не удалось: скачать 0.4.0 с GitHub…", "Проверить обновления…"},
+	} {
+		if got := checkTitle(c.v); got != c.chk {
+			t.Errorf("%+v: check item %q, want %q", c.v, got, c.chk)
+		}
+		if got := updateTitle(c.v); c.update != "" && got != c.update {
+			t.Errorf("%+v: update item %q, want %q", c.v, got, c.update)
+		}
+	}
+}
+
 // fakeRelease is what the fake GitHub serves: the latest release and its download.
 type fakeRelease struct {
 	status     int
@@ -203,10 +226,10 @@ func TestUpdateInstallsAndRelaunchesTheNewVersion(t *testing.T) {
 	if v := nextView(t, shown); v.check != checkRunning {
 		t.Fatalf("while checking: %+v", v)
 	}
-	if v := nextView(t, shown); v.update != "0.2.0" || v.updating != updateDownloading || updateTitle(v) != "Downloading Looking for Guidance 0.2.0…" {
+	if v := nextView(t, shown); v.update != "0.2.0" || v.updating != updateDownloading || updateTitle(v) != "Загружаю Looking for Guidance 0.2.0…" {
 		t.Fatalf("after finding 0.2.0: %+v", v)
 	}
-	if v := nextView(t, shown); v.update != "0.2.0" || v.updating != updateReady || updateTitle(v) != "Install 0.2.0 and Restart" {
+	if v := nextView(t, shown); v.update != "0.2.0" || v.updating != updateReady || updateTitle(v) != "Установить 0.2.0 и перезапустить" {
 		t.Fatalf("after downloading 0.2.0: %+v", v)
 	}
 	if got, _ := os.ReadFile(appExe(installed)); string(got) != "version 0.1.0" {
@@ -260,7 +283,7 @@ func TestFailedDownloadLeavesTheAppUntouched(t *testing.T) {
 				t.Fatalf("after finding 0.2.0: %+v", v)
 			}
 			v := nextView(t, shown)
-			if v.updating != updateFailed || updateTitle(v) != "Update Failed: Download 0.2.0 from GitHub…" {
+			if v.updating != updateFailed || updateTitle(v) != "Обновление не удалось: скачать 0.2.0 с GitHub…" {
 				t.Fatalf("after a bad download: %+v", v)
 			}
 			a.installWhenIdle()
