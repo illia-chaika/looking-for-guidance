@@ -3,28 +3,83 @@ name: Verify Windows release downloads
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: Release tag with the Windows EXE and ZIP to verify
+      mode:
+        description: Build the candidate from source or verify an already published release
         required: true
+        type: choice
+        default: prepare
+        options:
+          - prepare
+          - release
+      release_tag:
+        description: Expected version tag, such as v0.15.1
+        required: true
+        type: string
+      expected_exe_sha256:
+        description: SHA-256 of the prepared Windows EXE (required in prepare mode)
+        required: false
         type: string
 
 permissions:
   contents: read
 
 jobs:
+  prepare:
+    if: inputs.mode == 'prepare'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build the Windows downloads from a clean source archive and compare the EXE
+        shell: bash
+        env:
+          EXPECTED_SHA256: ${{ inputs.expected_exe_sha256 }}
+        run: |
+          if ! [[ "$EXPECTED_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo 'prepare mode requires the SHA-256 of the prepared Windows EXE' >&2
+            exit 1
+          fi
+          candidate="$RUNNER_TEMP/windows-release-build"
+          mkdir "$candidate"
+          git archive "$GITHUB_SHA" | tar -xf - -C "$candidate"
+          cd "$candidate"
+          ./tools/build-windows.sh
+          printf '%s  %s\n' "$EXPECTED_SHA256" dist/looking-for-guidance-Windows.exe | shasum -a 256 --check
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-source-build
+          path: |
+            ${{ runner.temp }}/windows-release-build/dist/looking-for-guidance-Windows.exe
+            ${{ runner.temp }}/windows-release-build/dist/looking-for-guidance-Windows.zip
+          if-no-files-found: error
+          retention-days: 1
+
   verify:
+    needs: prepare
+    if: ${{ !cancelled() && (needs.prepare.result == 'success' || inputs.mode == 'release') }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
-          # Dispatch on the candidate commit or branch. A draft's tag may only be created when it is published.
+          # Dispatch on the candidate or published revision so the verification uses the matching tests.
           ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Download the prepared release assets
+      - uses: actions/download-artifact@v8
+        if: inputs.mode == 'prepare'
+        with:
+          name: windows-source-build
+          path: dist
+      - name: Download the published release assets
+        if: inputs.mode == 'release'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
