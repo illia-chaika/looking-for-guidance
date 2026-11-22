@@ -58,6 +58,10 @@ func (a activityArgs) label(tool string) string {
 		return label
 	}
 	switch tool {
+	case "get_installed_addons":
+		return "Аддоны"
+	case "get_client_api_source":
+		return "Справка по API"
 	case "get_recipes":
 		return "Рецепты"
 	case "get_auction_prices":
@@ -148,7 +152,7 @@ func gameOutcome(it cxItem) (r activityResult, status, note string) {
 	if r.Captured == "" {
 		return r, "failed", ""
 	}
-	if it.Tool == "get_recipes" {
+	if it.Tool == "get_recipes" || it.Tool == "get_installed_addons" || it.Tool == "get_client_api_source" {
 		switch r.Status {
 		case "ok", "partial", "unavailable":
 			return r, r.Status, ""

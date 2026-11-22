@@ -29,7 +29,7 @@ local defaults = {
     extras = true,
     context = {
         character = true, location = true, quests = true, gear = true, bags = true, talents = true,
-        skills = true, spells = true, target = true, reputation = true, buffs = true,
+        skills = true, spells = true, target = true, reputation = true, buffs = true, addons = true,
     },
 }
 

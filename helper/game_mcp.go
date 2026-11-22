@@ -26,7 +26,19 @@ func gameTools(dir string) []mcpObject {
 			"annotations": mcpObject{"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false},
 		}
 	}
+	addons := tool("get_installed_addons", "Read installed add-ons for this character when diagnosing an add-on or UI issue. "+
+		"Each group's flags apply to its listed add-ons. loadError is the client's load-error flag (omitted when unknown). "+
+		"When dependenciesKnown is true, an omitted dependencies list means the add-on requires none. "+
+		"name is the folder and title is omitted when identical. total counts listed rows. "+
+		"Looking for Guidance's groupedModules counts its folded transport modules. bannedModules, unavailableSecurityModules (NOT_AVAILABLE) "+
+		"and unknownSecurityModules (unreadable or unrecognized) count their security results. loadErrorModules counts modules with load errors "+
+		"and unknownLoadErrorModules counts unreadable load-error flags. The parent's own flags are in its group. "+
+		"Only BANNED confirms a ban. NOT_AVAILABLE gives no security verdict. A partial result includes all rows with gaps in the readings.",
+		mcpObject{}, []string{"snapshot_id"})
+	// Claude otherwise saves a large inventory to a file the game adviser cannot read.
+	addons["_meta"] = mcpObject{"anthropic/maxResultSizeChars": 200_000}
 	tools := []mcpObject{
+		addons,
 		tool("get_recipes", "Read this character's observed profession books, learned flags and selected recipe requirements at question time. Missing recipes are unknown. Rank in books is the character's proficiency, not the recipe's required skill. Filter by localized profession/name or recipe spell ID; product item IDs are separate. "+pageHelp,
 			recipeProperties(), []string{"snapshot_id"}),
 		tool("get_context", "Read short summaries of the player and their location at question time. On a Field Journal card request sections=[journal] for the selected card's facts. For a build start with get_talents; for named or exact gear and spells use get_equipment and search_spellbook.",
@@ -39,6 +51,9 @@ func gameTools(dir string) []mcpObject {
 		tool("get_details", "Read live localized game-client cards for 1–6 item or spell references in one call. Supply kind and id. Section is optional for unambiguous snapshot matches. Pass exact item links to preserve instance bonuses. For a known outside candidate specify an enabled section (gear/bags for items or spells for spells). Check each card’s status and read_at.",
 			mcpObject{"refs": mcpObject{"type": "array", "minItems": 1, "maxItems": maxDetailRefs, "items": refSchema()}}, []string{"snapshot_id", "refs"}),
 	}
+	apiSource := tool("get_client_api_source", "Resolve this question's exact WoW Forever build to its UI source revision. Open documentation_index_url for a plain-text list of API files, then open the relevant file relative to that index and cite it.", mcpObject{}, []string{"snapshot_id"})
+	apiSource["annotations"].(mcpObject)["openWorldHint"] = true
+	tools = append(tools, apiSource)
 	for _, t := range entryTools {
 		tools = append(tools, tool(t.name, t.description+" "+pageHelp, t.properties(), []string{"snapshot_id"}))
 	}
@@ -79,6 +94,12 @@ type gameToolArgs struct {
 }
 
 func queryGameSnapshot(dir, tool string, raw json.RawMessage) (mcpObject, error) {
+	if tool == "get_installed_addons" {
+		return queryInstalledAddons(dir, raw)
+	}
+	if tool == "get_client_api_source" {
+		return queryClientAPISource(dir, raw)
+	}
 	if tool == "get_recipes" {
 		return queryRecipes(dir, raw)
 	}
@@ -224,7 +245,7 @@ func runGameMCP(in io.Reader, out io.Writer, dir string) error {
 					Name      string          `json:"name"`
 					Arguments json.RawMessage `json:"arguments"`
 				}
-				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices", "find_auction_upgrades", "search_game_data", "get_game_data", "get_changes"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
+				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices", "find_auction_upgrades", "search_game_data", "get_game_data", "get_changes", "get_installed_addons", "get_client_api_source"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
 					fail(-32602, "Unknown tool or invalid parameters")
 					break
 				}

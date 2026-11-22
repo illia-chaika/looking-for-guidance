@@ -129,6 +129,31 @@ func TestLocalMCPProtocolAndSourceLabels(t *testing.T) {
 	if !strings.Contains(lines[1], "get_context") || !strings.Contains(lines[2], "Новое задание") || !strings.Contains(lines[3], `"isError":true`) {
 		t.Fatal(out.String())
 	}
+	var registry struct {
+		Result struct {
+			Tools []struct {
+				Name string
+				Meta struct {
+					MaxChars int `json:"anthropic/maxResultSizeChars"`
+				} `json:"_meta"`
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &registry); err != nil {
+		t.Fatal(err)
+	}
+	var expanded []string
+	for _, tool := range registry.Result.Tools {
+		if limit := tool.Meta.MaxChars; limit != 0 {
+			if limit != 200_000 {
+				t.Fatalf("%s declares unexpected Claude output limit %d", tool.Name, limit)
+			}
+			expanded = append(expanded, tool.Name)
+		}
+	}
+	if len(expanded) != 1 || expanded[0] != "get_installed_addons" {
+		t.Fatalf("unexpected tools with expanded Claude output: %v", expanded)
+	}
 	for i, want := range []string{"Журнал заданий", ""} {
 		var res struct {
 			Result json.RawMessage `json:"result"`

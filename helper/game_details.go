@@ -26,7 +26,8 @@ type detailRequest struct {
 	Login     string    `json:"login,omitempty"`
 	BagCounts bool      `json:"bagCounts,omitempty"`
 	// Upgrade asks the add-on to judge auction candidates for one equipment slot instead of reading cards.
-	Upgrade *upgradeQuery `json:"upgrade,omitempty"`
+	Upgrade *upgradeQuery          `json:"upgrade,omitempty"`
+	Addons  *addonInventoryRequest `json:"addons,omitempty"`
 }
 
 type detailEnvelope struct {
@@ -160,6 +161,9 @@ func acceptGameDetails(dir, runID string, p packet, now time.Time) error {
 	at := time.Unix(int64(p.At), 0)
 	if p.At <= 0 {
 		at = now
+	}
+	if env.Addons != nil {
+		return acceptAddonPage(base, p.Addons, at)
 	}
 	if env.Upgrade != nil {
 		var answer map[string]json.RawMessage

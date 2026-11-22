@@ -52,6 +52,7 @@ apps = false
 [mcp_servers.wow_game]
 command = %s
 args = ["--game-mcp"]
+tool_timeout_sec = 180
 `
 
 // codexProfileDir is where Codex keeps the adviser's profile and sign-in, or "" without a user settings folder.
@@ -104,9 +105,10 @@ func tomlString(s string) string {
 // codexArgs starts the app server with this app as the game data server, wherever the app is now: a profile
 // written before the app was moved would otherwise point at a file that is gone.
 func codexArgs() []string {
-	args := []string{"app-server"}
+	// A complete add-on inventory can exceed the model's default 10,000-token tool result budget.
+	args := []string{"app-server", "-c", "tool_output_token_limit=50000"}
 	if exe, err := os.Executable(); err == nil {
-		args = append(args, "-c", "mcp_servers.wow_game.command="+tomlString(exe), "-c", `mcp_servers.wow_game.args=["--game-mcp"]`)
+		args = append(args, "-c", "mcp_servers.wow_game.command="+tomlString(exe), "-c", `mcp_servers.wow_game.args=["--game-mcp"]`, "-c", "mcp_servers.wow_game.tool_timeout_sec=180")
 	}
 	return args
 }

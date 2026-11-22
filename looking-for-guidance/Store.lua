@@ -89,19 +89,24 @@ function Store.Awaiting()
     return Store.Working() or Store.codex == "error" or Store.starting
 end
 
-function Store.Track(seq)
-    unacked[seq] = true
+function Store.Track(seq, canRetry)
+    unacked[seq] = canRetry or true
     sentAt[seq] = nil
 end
 
 function Store.Tracked(seq)
-    return unacked[seq] == true
+    return unacked[seq] ~= nil
 end
 
 -- True once the packet was sent a second time by itself.
 function Store.Retried(seq)
     return retried[seq] == true
 end
+
+T.On("PacketCancelled", function(seq)
+    unacked[seq], sentAt[seq] = nil, GetTime()
+    T.Fire("StoreChanged", {})
+end)
 
 T.On("PacketSent", function(seq)
     if not unacked[seq] then return end
@@ -319,14 +324,14 @@ function Store.Apply(data)
     for _, seq in ipairs((data.acks or {})[T.Transport.session] or {}) do
         acked[seq] = true
     end
-    for seq in pairs(unacked) do
+    for seq, canRetry in pairs(unacked) do
         local at = sentAt[seq]
         if acked[seq] then
             unacked[seq], sentAt[seq] = nil, nil
         elseif at and GetTime() - at >= ACK_WINDOW - 0.05 then
             -- This payload is newer than the frames and does not confirm them: they were lost on the way.
             -- Send the packet once more before calling it undelivered.
-            if not retried[seq] and GetTime() - at < GIVE_UP and T.Transport.Retry(seq) then
+            if not retried[seq] and GetTime() - at < GIVE_UP and (canRetry == true or canRetry()) and T.Transport.Retry(seq) then
                 retried[seq], sentAt[seq] = true, nil
             else
                 unacked[seq] = nil

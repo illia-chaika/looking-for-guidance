@@ -89,6 +89,9 @@ func TestCodexProfileIsCreatedOnce(t *testing.T) {
 
 	// The game data server is named at every start, so a profile written before the app moved still works.
 	args := codexArgs()
+	if !slices.Contains(args, "tool_output_token_limit=50000") {
+		t.Fatalf("large tool results would be truncated: %q", args)
+	}
 	if args[0] != "app-server" || !slices.Contains(args, "mcp_servers.wow_game.command="+tomlString(exe)) || !slices.Contains(args, `mcp_servers.wow_game.args=["--game-mcp"]`) {
 		t.Fatalf("Codex is started with %q", args)
 	}

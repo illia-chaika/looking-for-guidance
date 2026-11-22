@@ -36,6 +36,7 @@ Transport.lua
 Sync.lua
 GameDetails.lua
 AuctionUpgrades.lua
+InstalledAddons.lua
 Recipes.lua
 Context.lua
 Actions.lua

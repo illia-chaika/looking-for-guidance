@@ -99,7 +99,7 @@ check("the reply's frames go out", T.Store.Delivery(seq) == "sent")
 wow.Run(2)
 check("a reply the helper did not confirm goes out once more by itself", T.Store.Delivery(seq) == "sending" and T.Store.Retried(seq))
 settle()
-wow.Run(2)
+decided(seq)
 check("no ack after the second window means not delivered", T.Store.Delivery(seq) == "failed")
 local resent = T.Actions.Resend(mana, seq)
 check("delivery retry reuses the original reply identity", resent == seq and T.Store.Delivering(mana))
@@ -251,7 +251,7 @@ end
 T.Window.Select("019a7c2e-0002")
 local composer = find(function(frame) return frame.choice and frame.context and frame.edit end)
 local context = composer.context
-check("all sections are available by default", #T.Context.parts == 11 and context.text._text == T.Context.Summary())
+check("all sections are available by default", #T.Context.parts == 12 and context.text._text == T.Context.Summary())
 for _, part in ipairs(T.Context.parts) do check("default " .. part.key, T.settings.context[part.key]) end
 check("active conversation shows model and effort in footer", composer.choice:IsShown() and composer.choice.text._text == "GPT-6.1-Sol · medium")
 composer.choice:Fire("OnClick")
@@ -286,6 +286,7 @@ check("the preview names each collected category and shows occupied gear slots",
     "Target: Elandra (npc:2601) level 33, hostile",
     "Reputation: Stormwind (faction:72) 3000",
     "Buffs: Arcane Intellect",
+    "Installed add-ons: available on request",
 }, "\n"))
 local previewClose = find(function(frame) return frame.glyph and frame.glyph.name == "close" and rawget(frame._parent, "Open") and frame:IsVisible() end)
 previewClose:Fire("OnClick")

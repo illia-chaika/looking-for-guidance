@@ -1,6 +1,9 @@
 local _, T = ...
 -- en, de, fr, es, pt-BR, ko, zh-Hans, zh-Hant
 T.AddLocaleRows({
+    ["Аддоны"]={"Add-ons","Add-ons","Addons","Accesorios","Add-ons","애드온","插件","插件"},
+    ["Справка по API"]={"API reference","API-Referenz","Référence de l’API","Referencia de la API","Referência da API","API 참고 자료","API 参考","API 參考"},
+    ["Список и состояние аддонов по запросу советника"]={"Add-on list and status when the adviser asks","Liste und Status der Add-ons auf Anfrage des Ratgebers","Liste et état des addons à la demande du conseiller","Lista y estado de los accesorios cuando el asesor los solicita","Lista e estado dos add-ons quando o conselheiro solicitar","조언자가 요청할 때 애드온 목록과 상태 제공","顾问请求时提供插件列表和状态","顧問要求時提供插件清單和狀態"},
     ["Рецепты"]={"Recipes","Rezepte","Recettes","Recetas","Receitas","제조법","配方","配方"},
     ["Аукцион"]={"Auction house","Auktionshaus","Hôtel des ventes","Casa de subastas","Casa de leilões","경매장","拍卖行","拍賣場"},
     ["Поиск в базе мира"]={"World data search","Suche in den Weltdaten","Recherche dans les données du monde","Búsqueda en los datos del mundo","Busca nos dados do mundo","월드 데이터 검색","搜索世界数据","搜尋世界資料"},

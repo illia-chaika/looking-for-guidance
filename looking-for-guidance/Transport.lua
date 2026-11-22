@@ -37,7 +37,7 @@ local function slots()
     end
     return installed
 end
-local queue, shown = {}, {}
+local queue, shown, sent = {}, {}, {}
 local stepping, shownAt = false, 0
 -- Real time where the client has it: the frame's own time stands still while the game is busy.
 local clock = GetTimePreciseSec or GetTime
@@ -61,11 +61,30 @@ local function show(frame)
     C_AddOns.SaveAddOns()
 end
 
+local function cancel(index)
+    local packet = table.remove(queue, index)
+    -- Drop the bytes but retain the guard for callers replaying their own copy of the envelope.
+    if sent[packet.seq] then sent[packet.seq].body = nil end
+    T.Fire("PacketCancelled", packet.seq)
+end
+
+function Transport.CancelDisallowed()
+    for i = #queue, 1, -1 do
+        local packet = queue[i]
+        if packet.canSend and not packet.canSend() then cancel(i) end
+    end
+end
+
 -- Each frame waits a full interval after the previous one. A repeating ticker fires early after a late tick to keep
 -- its schedule, and two frames 10 ms apart are overwritten on disk before the helper has read the first:
 -- one missed frame loses the whole packet.
 local function step()
     local packet = queue[1]
+    -- The next start frame resets the helper's decoder if permission changed mid-packet.
+    while packet and packet.canSend and not packet.canSend() do
+        cancel(1)
+        packet = queue[1]
+    end
     if not packet then
         stepping = false
         return
@@ -119,8 +138,8 @@ local function encode(packet)
     return C_EncodingUtil.CompressString(C_EncodingUtil.SerializeJSON(packet), Enum.CompressionMethod.Zlib)
 end
 
-local function enqueue(number, body)
-    table.insert(queue, { seq = number, next = 1, frames = frames(body) })
+local function enqueue(number, body, canSend)
+    table.insert(queue, { seq = number, next = 1, frames = frames(body), canSend = canSend })
     if not stepping then
         stepping = true
         C_Timer.After(FRAME_SECONDS, step)
@@ -129,13 +148,13 @@ end
 
 -- The latest packets as sent, so one that the helper never confirmed can go out again unchanged.
 local KEPT = 24
-local sent = {}
 
-function Transport.Send(packet, byteBudget, compact)
+function Transport.Send(packet, byteBudget, compact, canSend)
     if not C_AddOns.DoesAddOnExist(bits[BITS]) then
         return nil, "uninstalled"
     end
     seq = seq + 1
+    sent[seq - KEPT] = nil
     packet.seq, packet.session, packet.at = seq, Transport.session, time()
     local ok, body = pcall(encode, packet)
     if ok and type(body) == "string" and byteBudget and #body > byteBudget and compact then
@@ -150,29 +169,33 @@ function Transport.Send(packet, byteBudget, compact)
     elseif #body > (byteBudget or 65535) then
         return nil, "oversized"
     end
-    enqueue(seq, body)
-    sent[seq], sent[seq - KEPT] = body, nil
+    enqueue(seq, body, canSend)
+    sent[seq] = { body = body, canSend = canSend }
     return seq, nil, body
 end
 
 -- Frames can be lost on the way: the game rewrites AddOns.txt every 40 ms and the helper may miss one.
 -- The helper recognises a repeated session and sequence, so sending the same envelope twice is safe.
 function Transport.Retry(number)
-    if not sent[number] or Transport.Sending(number) or not C_AddOns.DoesAddOnExist(bits[BITS]) then
+    local packet = sent[number]
+    if not packet or not packet.body or (packet.canSend and not packet.canSend()) or Transport.Sending(number) or not C_AddOns.DoesAddOnExist(bits[BITS]) then
         return false
     end
-    enqueue(number, sent[number])
+    enqueue(number, packet.body, packet.canSend)
     return true
 end
 
 -- The helper deduplicates by session and sequence. Replay the exact original
 -- envelope (including capture time and state) when the acknowledgement was lost.
-function Transport.Resend(number, body)
+function Transport.Resend(number, body, canSend)
+    local saved = sent[number]
+    canSend = (saved and saved.canSend) or canSend
+    if canSend and not canSend() then return nil, "revoked" end
     if not C_AddOns.DoesAddOnExist(bits[BITS]) then
         return nil, "uninstalled"
     end
     if not Transport.Sending(number) then
-        enqueue(number, body)
+        enqueue(number, body, canSend)
     end
     return number
 end

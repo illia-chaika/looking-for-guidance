@@ -143,6 +143,7 @@ function Popovers.Settings(owner, parent, handlers)
         if not draft or not apply:IsEnabled() then return end
         local localeChanged = T.settings.locale ~= draft.locale
         for _, key in ipairs(keys) do T.settings[key] = draft[key] end
+        T.Fire("SettingsSaved")
         panel:Hide()
         if localeChanged then T.RefreshLocale() end
         handlers.apply()

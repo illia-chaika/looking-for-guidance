@@ -1,6 +1,9 @@
 local _, T = ...
 -- Italian captions, keyed by the Russian source like the columns in LocaleData.lua.
 T.AddLocaleColumn("itIT", {
+    ["Аддоны"] = "Add-on",
+    ["Справка по API"] = "Riferimento API",
+    ["Список и состояние аддонов по запросу советника"] = "Elenco e stato degli add-on su richiesta del consigliere",
     ["Blizzard давно не дополняла этот список: возможно, он переехал."] = "Blizzard non aggiorna questo elenco da tempo: forse è stato spostato.",
     ["Blizzard упоминает это задание в исправлениях"] = "Blizzard cita questa missione nelle correzioni",
     ["Blizzard это исправила"] = "Blizzard l’ha corretto",

@@ -7,7 +7,7 @@ import (
 
 // The existing project instructions may have been cached by a resumed writer.
 // Carry the checking rule alongside each new game question, including follow-ups.
-const gameEvidenceHint = "Before answering, verify game facts against the current WoW Forever client or a source for WoW Forever. A skill rank is not a learned recipe. For personal crafting advice use get_recipes, retry by confirmed recipe spell ID if the name is missing, and check materials. If the snapshot cannot support a claim, search the web for this version, read a relevant source, and cite its URL. If your first lookup is inconclusive, refine it; say what is still unknown if verification fails."
+const gameEvidenceHint = "Before answering, verify game facts against the current WoW Forever client or a source for WoW Forever. A skill rank is not a learned recipe. For personal crafting advice use get_recipes, retry by confirmed recipe spell ID if the name is missing, and check materials. For this player's add-on problems use get_installed_addons. For general UI API questions use get_client_api_source and open and cite the relevant file at that exact revision. If the snapshot cannot support a claim, search the web for this version, read a relevant source, and cite its URL. If your first lookup is inconclusive, refine it; say what is still unknown if verification fails."
 const evidenceOpen = "<wow_evidence version=\"1\">"
 const evidenceClose = "</wow_evidence>\n\n"
 

@@ -427,6 +427,7 @@ Context.parts = {
     { key = "target", label = "Цель", lines = target },
     { key = "reputation", label = "Репутация", lines = reputation },
     { key = "buffs", label = "Эффекты", lines = buffs },
+    { key = "addons", label = "Аддоны", lines = function() return { "Installed add-ons: available on request" } end },
 }
 
 -- Reuse complete, identical sections of a snapshot only after the helper

@@ -49,6 +49,9 @@ func TestWebProvenanceRequiresReturnedSourceData(t *testing.T) {
 		{"tool error page", "{" + action + `,"results":[{"type":"text_result","url":"https://example.com/forever","snippet":"Internal Error: page is not accessible via this tool"}]}`, false, "Поиск без подтверждения"},
 		{"no results", "{" + action + `,"results":[]}`, false, "Поиск без подтверждения"},
 		{"memory is not world evidence", `{"type":"mcpToolCall","server":"wow_game","tool":"get_memory","status":"completed","result":{"content":[{"text":"{\"captured\":\"now\",\"notes\":[]}"}]}}`, false, "Без веб-поиска"},
+		{"an exact revision still needs a page read", `{"type":"mcpToolCall","server":"wow_game","tool":"get_client_api_source","status":"completed","result":{"content":[{"text":"{\"captured\":\"now\",\"status\":\"ok\"}"}]}}`, false, "Без веб-поиска"},
+		{"a complete inventory supports local diagnosis", `{"type":"mcpToolCall","server":"wow_game","tool":"get_installed_addons","status":"completed","result":{"content":[{"text":"{\"captured\":\"now\",\"status\":\"ok\"}"}]}}`, false, "Аддоны · Без веб-поиска"},
+		{"unavailable inventory", `{"type":"mcpToolCall","server":"wow_game","tool":"get_installed_addons","status":"completed","result":{"content":[{"text":"{\"captured\":\"now\",\"status\":\"unavailable\"}"}]}}`, false, "Без веб-поиска"},
 	} {
 		t.Run(test.note, func(t *testing.T) {
 			var it cxItem

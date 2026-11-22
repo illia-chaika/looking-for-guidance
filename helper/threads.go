@@ -407,7 +407,8 @@ func eventSource(it cxItem, e turnEvent) string {
 	if it.Type == "webSearch" && e.Status == "ok" {
 		return "Веб-поиск"
 	}
-	if it.Server == "wow_game" && !memoryTool(it.Tool) && it.Status == "completed" && it.Result != nil && (e.Status == "ok" || e.Status == "partial") {
+	// Resolving a source revision gives the adviser an address. The subsequent page read supplies the evidence.
+	if it.Server == "wow_game" && it.Tool != "get_client_api_source" && !memoryTool(it.Tool) && it.Status == "completed" && it.Result != nil && (e.Status == "ok" || e.Status == "partial") {
 		return e.Label
 	}
 	return ""

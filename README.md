@@ -21,6 +21,13 @@ before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
 searches current sources before answering. Shift-click items, spells and quests into the message. Each character has
 its own conversations and its own memory of decisions ("I am saving for the mount", "keep the linen").
 
+**Add-on help.** Ask “Why did my quest markers disappear?” The adviser can request the installed add-on list from
+your running game, even if you do not know the add-on's name. It checks which add-ons are enabled for this character,
+which loaded, and whether the client reports a load error, a block or a missing dependency. Looking for Guidance's
+transport modules share one entry with separate counts for blocked modules and modules with load errors. For a
+question like “Can an add-on do this in combat?”, the adviser looks up your exact Forever build on GitHub and
+links to the relevant API documentation or Blizzard UI code.
+
 **Auction prices.** The adviser can look up asking prices on your character's auction house before it tells you to
 buy or sell something there, and search your market for an upgrade for one equipment slot within a budget. After a
 one-time *Sign in with Battle.net* in the companion's menu it reads Blizzard's hourly snapshots from the project's
@@ -103,6 +110,9 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
   world dataset below, and asks for a one-time Battle.net sign-in that keeps nothing about your account.
 - What is sent to the model: your question, and the sections of the character snapshot the agent requests. You
   choose the allowed sections in *Settings → Character data*.
+- The *Add-ons* setting lets the adviser request the full installed list. The game reads it on request.
+  Turn off this setting or use question-only mode to keep the list private. API reference lookups use the public
+  build history of Gethe/wow-ui-source on GitHub. Both features work without a Battle.net sign-in.
 - Journal research spends the same allowance, so by default it runs **only when you press a button** in a section.
   *Settings → Advisor* has the switch to *Automatic*: then class advice is prepared after login and the other
   sections when you open them. *What changed* is matched on your computer and spends nothing, so it is checked after
@@ -351,6 +361,8 @@ python3 test/install_quiesce.py && python3 test/install_addon_payload.py
 
 Live checks talk to the real world and are off by default:
 
+- `FOREVER_API_BUILD=1.60.1.71037 go test -run TestLiveClientAPISource -v ./helper` resolves the given client build
+  on GitHub, opens that revision’s plain-text index and reads the listed add-on API documentation.
 - `FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper` runs one journal research job against the real
   agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too; `digest` reads the
   shortlist the world dataset in your settings folder allows). It spends allowance.

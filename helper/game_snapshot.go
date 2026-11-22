@@ -16,18 +16,19 @@ import (
 )
 
 type gameSnapshot struct {
-	Journal   *journalCard      `json:"journal,omitempty"`
-	Character string            `json:"character,omitempty"`
-	Login     string            `json:"login,omitempty"`
-	Question  string            `json:"question,omitempty"`
-	Thread    string            `json:"thread,omitempty"`
-	Captured  string            `json:"captured"`
-	Sections  map[string]string `json:"sections"`
-	Quests    []gameQuest       `json:"quests,omitempty"`
-	Entries   []gameEntry       `json:"entries,omitempty"`
-	Lookup    bool              `json:"detail_lookup,omitempty"`
-	Session   string            `json:"session,omitempty"`
-	RunID     string            `json:"run_id,omitempty"`
+	Journal     *journalCard      `json:"journal,omitempty"`
+	Character   string            `json:"character,omitempty"`
+	Login       string            `json:"login,omitempty"`
+	Question    string            `json:"question,omitempty"`
+	Thread      string            `json:"thread,omitempty"`
+	Captured    string            `json:"captured"`
+	Sections    map[string]string `json:"sections"`
+	Quests      []gameQuest       `json:"quests,omitempty"`
+	Entries     []gameEntry       `json:"entries,omitempty"`
+	Lookup      bool              `json:"detail_lookup,omitempty"`
+	AddonLookup bool              `json:"addon_lookup,omitempty"`
+	Session     string            `json:"session,omitempty"`
+	RunID       string            `json:"run_id,omitempty"`
 }
 
 type gameQuest struct {
@@ -56,6 +57,10 @@ func parseGameSnapshot(state string, at int64) gameSnapshot {
 	s := gameSnapshot{Captured: time.Unix(at, 0).UTC().Format(time.RFC3339), Sections: map[string]string{}}
 	inQuests := false
 	for _, line := range strings.Split(state, "\n") {
+		if line == "Installed add-ons: available on request" {
+			s.AddonLookup = true
+			continue
+		}
 		if line == "Detail lookup: supported" {
 			s.Lookup = true
 			continue
