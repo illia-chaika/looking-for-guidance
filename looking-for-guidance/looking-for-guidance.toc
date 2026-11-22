@@ -12,7 +12,7 @@
 ## Notes-zhTW: 遊戲內的任務、裝備與天賦助手。
 ## Notes-itIT: Consigliere in gioco per missioni, equipaggiamento e talenti.
 ## Author: thott.bot contributors, Looking for Guidance contributors
-## Version: 0.13.0
+## Version: 0.14.0
 ## Category: Looking for Guidance
 ## DefaultState: enabled
 ## SavedVariables: looking_for_guidance_settings
