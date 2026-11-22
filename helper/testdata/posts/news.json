@@ -1,0 +1,7 @@
+{"layoutId":"made-up","feed":{"contentItems":[
+{"contentId":"a1","contentType":"blogs","properties":{"newsId":"24315281","title":"WoW: Forever Hotfixes - November 20, 2026","summary":"A made-up summary of the hotfix article, which is read on its own.","lastUpdated":"2026-11-21T00:18:18Z","newsUrl":"https://news.blizzard.com/en-us/article/24315281/wow-forever-hotfixes-november-20-2026"}},
+{"contentId":"a2","contentType":"blogs","properties":{"newsId":"90000001","title":"WoW: Forever Weekly – A Made-up Edition","summary":"A made-up article written for these tests: new camps in Thousand Needles.","lastUpdated":"2026-11-20T18:00:00Z","newsUrl":"https://news.blizzard.com/en-us/article/90000001/wow-forever-weekly-a-made-up-edition"}},
+{"contentId":"a3","contentType":"blogs","properties":{"newsId":"90000002","title":"Made-up news about another game","summary":"Not about Forever.","lastUpdated":"2026-11-19T18:00:00Z","newsUrl":"https://news.blizzard.com/en-us/article/90000002/made-up"}},
+{"contentId":"a4","contentType":"blogs","properties":{"newsId":90000003,"title":"An old made-up WoW: Forever article","summary":"Older than two weeks.","lastUpdated":"2026-10-01T18:00:00Z","newsUrl":"https://news.blizzard.com/en-us/article/90000003/old"}},
+{"contentId":"a5","contentType":"blogs","properties":{"newsId":"90000004","title":"Explore the Made-up Dungeons of World of Warcraft: Forever","summary":"A made-up dungeon tour.","lastUpdated":"2026-11-18T17:00:00Z","newsUrl":"https://example.com/not-blizzard"}}
+],"pagination":{"offset":0,"limit":24,"hasNextPage":true}}}

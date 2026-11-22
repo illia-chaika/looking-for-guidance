@@ -1,6 +1,7 @@
 local _, T = ...
--- "What changed": Blizzard's hotfix notes and the game's data changes that concern this character, matched by game
--- IDs in the helper without the adviser. The adviser writes a short explanation only when the player asks.
+-- "What changed": Blizzard's hotfix notes, the game's data changes, and Blizzard's blue posts and news about Forever
+-- that concern this character, matched by game IDs in the helper without the adviser. The newest posts come with a
+-- copyable link. The adviser writes a short explanation of the notes and data changes only when the player asks.
 local Hub, Data, Insights = T.HubOverview, T.HubData, T.Insights
 local allowed = Hub.Allowed
 local function L(...) return T.L(...) end
@@ -94,13 +95,35 @@ local function fields(item)
     return table.concat(lines, "\n")
 end
 
+local POSTS = { blue = { "Синий пост", "Синий пост: {1}" }, news = { "Новость Blizzard", "Новость Blizzard: {1}" } }
+
 local function row(item)
     local why = reason(item)
     if item.kind == "data" then
         local changed = fields(item)
         return { kind = "check", title = item.name, text = why and changed ~= "" and why .. "\n" .. changed or why or changed, value = day(item.date) }
+    elseif item.kind == "post" then
+        -- The line that concerns the character, under the post it is from.
+        local label = POSTS[item.source] or POSTS.blue
+        local line = type(item.line) == "string" and item.line ~= "" and item.line or nil
+        local from = line and L(label[2], item.text or "") or L(label[1])
+        return { kind = "check", title = line or item.text, text = why and from .. "\n" .. why or from, value = day(item.date) }
     end
     return { kind = "check", title = item.text, text = why, value = day(item.date) }
+end
+
+-- Links to the posts: the ones that concern the character first, then the newest. The game cannot open a browser.
+local function postLinks(data)
+    local list, seen = {}, {}
+    for _, group in ipairs({ data.mine or {}, data.class or {}, data.posts or {} }) do
+        for _, item in ipairs(group) do
+            if #list < 5 and item.kind == "post" and type(item.url) == "string" and not seen[item.url] then
+                seen[item.url] = true
+                list[#list + 1] = { title = day(item.date) .. " · " .. tostring(item.text or ""), url = item.url }
+            end
+        end
+    end
+    return list
 end
 
 local function summary(c)
@@ -152,6 +175,11 @@ Hub.Extend("news", {
             if (data.more or 0) > 0 then
                 c.rows[#c.rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("И ещё {1}: спроси советника, что изменилось.", data.more) }
             end
+            local links = postLinks(data)
+            if #links > 0 then
+                c.rows[#c.rows + 1] = { kind = "section", text = L("Синие посты и новости") }
+                c.rows[#c.rows + 1] = { kind = "sources", list = links }
+            end
             if data.world_sign_in then
                 c.rows[#c.rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("База мира придёт после разового входа через Battle.net в меню Looking for Guidance, так требуют условия Blizzard. Пока совпадения только по классу, профессиям и заданиям.") }
             elseif data.no_world then
@@ -166,7 +194,14 @@ Hub.Extend("news", {
                 c.rows[#c.rows + 1] = { kind = "sources", list = { { title = "WoW: Forever Hotfixes", url = data.url } }, at = found.at }
             end
             local actions = { refresh }
-            if #mine + #class > 0 then
+            -- The explanation reads the hotfix notes and data changes, not the posts.
+            local explainable = 0
+            for _, group in ipairs({ mine, class }) do
+                for _, item in ipairs(group) do
+                    if item.kind ~= "post" then explainable = explainable + 1 end
+                end
+            end
+            if explainable > 0 then
                 table.insert(actions, 1, { label = L("Объяснить коротко"), primary = true, click = explain })
             end
             c.rows[#c.rows + 1] = { kind = "actions", actions = actions }

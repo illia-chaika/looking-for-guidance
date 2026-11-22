@@ -66,6 +66,36 @@ var (
 
 // parseHotfixes turns the article into indented plain text per day. A paragraph that is only a date starts a day.
 func parseHotfixes(page string) []feedDay {
+	var days []feedDay
+	var current *feedDay
+	var body []string
+	end := func() {
+		if current != nil && len(body) > 0 {
+			current.Text = strings.Join(body, "\n")
+			days = append(days, *current)
+		}
+		current, body = nil, nil
+	}
+	for _, l := range htmlLines(page) {
+		if when, err := time.Parse("January 2, 2006", strings.TrimSpace(l)); err == nil {
+			end()
+			current = &feedDay{Date: when.Format("2006-01-02")}
+			continue
+		}
+		if current != nil {
+			body = append(body, l)
+		}
+	}
+	end()
+	if len(days) > feedDays {
+		days = days[:feedDays]
+	}
+	return days
+}
+
+// htmlLines turns a page into plain lines: one per paragraph or heading, list items as "- " indented two spaces per
+// level of nesting.
+func htmlLines(page string) []string {
 	page = feedScript.ReplaceAllString(page, " ")
 	var lines []string
 	var line strings.Builder
@@ -104,32 +134,7 @@ func parseHotfixes(page string) []feedDay {
 	}
 	line.WriteString(page[pos:])
 	flush()
-
-	var days []feedDay
-	var current *feedDay
-	var body []string
-	end := func() {
-		if current != nil && len(body) > 0 {
-			current.Text = strings.Join(body, "\n")
-			days = append(days, *current)
-		}
-		current, body = nil, nil
-	}
-	for _, l := range lines {
-		if when, err := time.Parse("January 2, 2006", strings.TrimSpace(l)); err == nil {
-			end()
-			current = &feedDay{Date: when.Format("2006-01-02")}
-			continue
-		}
-		if current != nil {
-			body = append(body, l)
-		}
-	}
-	end()
-	if len(days) > feedDays {
-		days = days[:feedDays]
-	}
-	return days
+	return lines
 }
 
 func fetchPage(ctx context.Context, url string) (string, error) {

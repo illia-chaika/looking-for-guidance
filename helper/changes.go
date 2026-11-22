@@ -51,7 +51,14 @@ type changesFile struct {
 		URL       string `json:"url"`
 		ChangedAt string `json:"changed_at"`
 	} `json:"issues"`
+	News    feedSignal   `json:"news"` // Blizzard's news about Forever
+	Blue    feedSignal   `json:"blue"` // the staff posts on the Forever forums
 	Changes []dataChange `json:"changes"`
+}
+
+type feedSignal struct {
+	Newest    string `json:"newest"`
+	ChangedAt string `json:"changed_at"`
 }
 
 type dataChange struct {
@@ -459,11 +466,14 @@ type changeItem struct {
 	Date     string      `json:"date"`
 	Category string      `json:"category,omitempty"`
 	Text     string      `json:"text,omitempty"`
-	Kind     string      `json:"kind"`   // note or data
+	Kind     string      `json:"kind"`   // note, data or post
 	Reason   string      `json:"reason"` // quest, zone, item, spell, profession, class or race
 	Name     string      `json:"name,omitempty"`
 	ID       int64       `json:"id,omitempty"`
 	Fields   [][3]string `json:"fields,omitempty"` // data changes: what, was, now
+	Source   string      `json:"source,omitempty"` // posts: blue or news
+	URL      string      `json:"url,omitempty"`    // posts: where to read it
+	Line     string      `json:"line,omitempty"`   // posts: the line that matched, when it is not the title
 	tier     string
 	dev      string
 }
@@ -842,10 +852,17 @@ type changesAnswer struct {
 	General int          `json:"general"`
 	More    int          `json:"more,omitempty"`
 	Key     string       `json:"key,omitempty"`           // moves when the mine list does: the add-on announces it once
+	Posts   []changeItem `json:"posts"`                   // the newest blue posts and news, for their links
 	Data    bool         `json:"data"`                    // whether the backend's data changes were here to compare
 	NoWorld bool         `json:"no_world,omitempty"`      // names could not be resolved: the world dataset is missing
 	SignIn  bool         `json:"world_sign_in,omitempty"` // and it waits for the Battle.net sign-in
 	NoNotes bool         `json:"no_notes,omitempty"`      // Blizzard's notes could not be read
+	NoPosts bool         `json:"no_posts,omitempty"`      // nor the blue posts and news
+}
+
+func byDate(items []changeItem) []changeItem {
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Date > items[j].Date })
+	return items
 }
 
 func answerChanges(req insightRequest, env insightEnv) (any, error) {
@@ -853,9 +870,16 @@ func answerChanges(req insightRequest, env insightEnv) (any, error) {
 	if len(req.Facts) == 0 || json.Unmarshal(req.Facts, &f) != nil {
 		return nil, errors.New("the journal sent no character facts")
 	}
-	mine, class, general := matchChanges(f, env.Feed, env.Changes, env.World, time.Now())
-	out := changesAnswer{Mine: []changeItem{}, Class: []changeItem{}, General: len(general), Data: env.Changes != nil,
-		NoWorld: env.World == nil, SignIn: env.World == nil && backendToken() == "", NoNotes: env.Feed == nil}
+	now := time.Now()
+	mine, class, general := matchChanges(f, env.Feed, env.Changes, env.World, now)
+	pm, pc, posts := matchPosts(f, env.World, env.Posts, now.AddDate(0, 0, -changesDays).Format("2006-01-02"), forumFor(req.GameLocale))
+	mine, class = byDate(append(mine, pm...)), byDate(append(class, pc...))
+	out := changesAnswer{Mine: []changeItem{}, Class: []changeItem{}, Posts: []changeItem{}, General: len(general), Data: env.Changes != nil,
+		NoWorld: env.World == nil, SignIn: env.World == nil && backendToken() == "", NoNotes: env.Feed == nil, NoPosts: env.Posts == nil}
+	if len(posts) > postsShown {
+		posts = posts[:postsShown]
+	}
+	out.Posts = append(out.Posts, posts...)
 	if env.Feed != nil {
 		out.URL = env.Feed.URL
 		if len(env.Feed.Days) > 0 {
@@ -885,7 +909,7 @@ func answerChanges(req insightRequest, env insightEnv) (any, error) {
 }
 
 var changesKind = &insightKind{
-	version: "changes-1", ttl: time.Hour, feed: true, changes: true, perCharacter: true, maxData: 32 << 10,
+	version: "changes-1", ttl: time.Hour, feed: true, changes: true, posts: true, perCharacter: true, maxData: 32 << 10,
 	local: answerChanges,
 }
 
@@ -967,7 +991,7 @@ func changesToolSchema() mcpObject {
 			"items": mcpObject{"type": "object", "additionalProperties": false, "required": []string{"kind", "id"}, "properties": mcpObject{
 				"kind": mcpObject{"type": "string", "enum": []string{"items", "quests", "spells", "places"}},
 				"id":   mcpObject{"type": "string", "pattern": `^[a-z]*-?[0-9]{1,9}$`, "maxLength": 24}}}},
-		"mine": mcpObject{"type": "boolean", "description": "Match this character (default true): notes naming its quests, zone, items, spells, professions, class or race, and data changes to its items and spells"},
+		"mine": mcpObject{"type": "boolean", "description": "Match this character (default true): notes naming its quests, zone, items, spells, professions, class or race, data changes to its items and spells, and the recent blue posts and news"},
 	}
 }
 
@@ -1019,7 +1043,42 @@ func queryChanges(dir string, raw json.RawMessage) (mcpObject, error) {
 	if ch != nil {
 		sources = append(sources, mcpObject{"title": "Game client data changes (numbers via wago.tools)", "built": ch.Built})
 	}
+	posts := readPosts(insightsDir)
+	if posts != nil {
+		sources = append(sources, mcpObject{"title": "Blizzard's staff (blue) posts on the WoW: Forever forums and Blizzard news about Forever",
+			"read": time.Unix(posts.Fetched, 0).UTC().Format(time.RFC3339)})
+	} else {
+		out["posts_note"] = "Blue posts and news have not been read on this computer yet; the journal's What changed card reads them."
+	}
 	out["sources"] = sources
+	out["posts"] = []mcpObject{}
+	byLink := map[string]blizzardPost{}
+	if posts != nil {
+		for _, p := range posts.Posts {
+			byLink[p.link("us")] = p
+		}
+	}
+	addPost := func(it changeItem, tier string) {
+		list := out["posts"].([]mcpObject)
+		if it.Date < since || len(list) >= 15 {
+			return
+		}
+		p := byLink[it.URL]
+		o := mcpObject{"date": it.Date, "source": it.Source, "title": it.Text, "url": it.URL, "author": p.Author, "excerpt": p.excerpt()}
+		if tier != "" {
+			o["tier"] = tier
+			if it.Reason != "" {
+				o["reason"] = it.Reason
+			}
+			if it.Name != "" {
+				o["name"] = it.Name
+			}
+			if it.Line != "" {
+				o["matched_line"] = it.Line
+			}
+		}
+		out["posts"] = append(list, o)
+	}
 	add := func(it changeItem, tier string) {
 		if it.Date < since {
 			return
@@ -1066,6 +1125,23 @@ func queryChanges(dir string, raw json.RawMessage) (mcpObject, error) {
 				}
 			}
 		}
+		if posts != nil {
+		post:
+			for _, p := range posts.Posts {
+				for _, n := range postNotes(p) {
+					for _, r := range index.scan(n.Text, false) {
+						if want[r.e.kind+":"+r.e.id] {
+							it := changeItem{Date: p.date(), Kind: "post", Source: p.Source, Text: p.Title, URL: p.link("us"), Name: r.e.en}
+							if n.Text != p.Title {
+								it.Line = clip(n.Text, changesTextMax)
+							}
+							addPost(it, "asked")
+							continue post
+						}
+					}
+				}
+			}
+		}
 		return out, nil
 	}
 	s, err := loadGameSnapshot(dir, a.ID)
@@ -1075,6 +1151,10 @@ func queryChanges(dir string, raw json.RawMessage) (mcpObject, error) {
 	body, err := os.ReadFile(changeFactsPath(insightsDir, s.Character))
 	if err != nil {
 		out["note"] = "This character's facts are not here yet: they arrive when the journal's What changed card is answered, at login. Use about to ask about records."
+		_, _, all := matchPosts(changeFacts{}, world, posts, since, "us")
+		for _, it := range all {
+			addPost(it, "")
+		}
 		return out, nil
 	}
 	var f changeFacts
@@ -1085,6 +1165,10 @@ func queryChanges(dir string, raw json.RawMessage) (mcpObject, error) {
 	}
 	for _, it := range c {
 		add(it, tierClass)
+	}
+	_, _, all := matchPosts(f, world, posts, since, "us")
+	for _, it := range all {
+		addPost(it, it.tier)
 	}
 	general := 0
 	for _, it := range g {

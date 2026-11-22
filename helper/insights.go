@@ -61,6 +61,7 @@ type insightEnv struct {
 	AuctionOff string       // otherwise why there are none: a code of auctionUnavailable
 	World      *worldData   // the world dataset, when the kind reads changes and the dataset is here
 	Changes    *changesFile // the backend's data changes and change signals, when downloaded
+	Posts      *postsCache  // Blizzard's blue posts and news about Forever, when they could be read
 }
 
 type insightKind struct {
@@ -73,6 +74,7 @@ type insightKind struct {
 	notes        bool // the answer depends on what the player asked the advisor to remember
 	auction      bool // the job reads the character's auction house
 	changes      bool // the job reads the world dataset and the backend's changes feed
+	posts        bool // the job reads Blizzard's blue posts and news about Forever
 	perCharacter bool
 	schema       string
 	prompt       func(insightRequest, insightEnv) (string, error)
@@ -286,6 +288,13 @@ func (e *insightEngine) resolve(job *insightJob) {
 	if job.kind.changes {
 		job.env.Changes, _ = readChanges(e.worldDir)
 		job.env.World, _ = loadWorldFrom(e.worldDir)
+	}
+	if job.kind.posts {
+		posts, err := loadPosts(context.Background(), e.dir, e.now(), e.fetch)
+		if err != nil {
+			logf("Blue posts and news unavailable: %v", err)
+		}
+		job.env.Posts = posts
 	}
 	if job.kind.local != nil {
 		if job.kind.changes {

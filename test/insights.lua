@@ -94,6 +94,27 @@ assert(says(newsWith({ no_world = true }), "The world data isn’t downloaded ye
 local waiting = newsWith({ no_world = true, world_sign_in = true })
 assert(says(waiting, "The world data comes after a one-time Battle.net sign-in") and not says(waiting, "The world data isn’t downloaded yet"),
     "a dataset that waits for the sign-in says where to sign in, once")
+-- Blue posts and news: a matched post shows the line that concerns the character under the post it is from; the
+-- newest posts come as copyable links, matched ones first; the explanation is offered for notes and data changes only.
+local withPosts = newsWith({
+    mine = { { date = "2026-11-19", kind = "post", source = "blue", text = "Class Tuning Coming Soon", line = "Vampiric Embrace heals more.",
+        reason = "spell", name = "Vampiric Embrace", url = "https://us.forums.blizzard.com/en/wow/t/800002/1" } },
+    class = { { date = "2026-11-20", kind = "post", source = "news", text = "WoW: Forever Weekly", reason = "class", name = "Priest",
+        url = "https://news.blizzard.com/en-us/article/90000001" } },
+    posts = {
+        { date = "2026-11-21", kind = "post", source = "blue", text = "Dungeon Experience Adjusted", url = "https://us.forums.blizzard.com/en/wow/t/800009/1" },
+        { date = "2026-11-19", kind = "post", source = "blue", text = "Class Tuning Coming Soon", url = "https://us.forums.blizzard.com/en/wow/t/800002/1" },
+    },
+})
+local r = withPosts.rows
+assert(r[2].title == "Vampiric Embrace heals more." and r[2].text == "Blue post: Class Tuning Coming Soon\nYour spell: Vampiric Embrace" and r[2].value == "19.11",
+    "a matched post shows its line, the post and why")
+assert(r[4].title == "WoW: Forever Weekly" and r[4].text == "Blizzard news\nYour class", "a post matched by its title shows the title")
+assert(r[5].text == "Blue posts and news" and r[6].kind == "sources" and #r[6].list == 3
+    and r[6].list[1].title == "19.11 · Class Tuning Coming Soon" and r[6].list[2].url == "https://news.blizzard.com/en-us/article/90000001"
+    and r[6].list[3].title == "21.11 · Dungeon Experience Adjusted", "links to the posts, the matched ones first, each once")
+local last = r[#r]
+assert(last.kind == "actions" and #last.actions == 1 and last.actions[1].label == "Check now", "posts alone are not sent for the short explanation")
 card = newsWith({})
 local toasts = #wow.frames
 hub.Observe(hub.Cards(hub.Model({})))

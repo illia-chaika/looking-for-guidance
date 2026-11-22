@@ -1,0 +1,7 @@
+{"posts":[
+{"id":700002,"name":"Bluestaff","username":"Bluestaff","created_at":"2026-11-19T17:36:10.000Z","blurb":"Made-up tuning notes written for these tests.","post_number":1,"topic_id":600002},
+{"id":700010,"name":"Bluestaff","username":"Bluestaff","created_at":"2026-11-12T23:44:00.000Z","blurb":"A made-up post about settings, only on this forum.","post_number":1,"topic_id":600010}
+],"topics":[
+{"id":600002,"title":"Class Tuning Coming Soon - Made-up (EU)","category_id":360},
+{"id":600010,"title":"Chat Channel Settings - Made-up","category_id":360}
+]}

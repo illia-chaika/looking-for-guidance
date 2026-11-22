@@ -32,7 +32,7 @@ research is prepared when you press the section's button — or by itself, if yo
 | Section | What you get |
 | --- | --- |
 | Check-up | Unspent talent points, spells waiting at the trainer, empty slots, worn gear, missing food buff, profession caps |
-| What changed | Blizzard's hotfixes and changes in the game's data that touch your quests, zone, gear, bags, spells, professions or class, found on your computer within seconds and announced once; a short explanation from the adviser on request |
+| What changed | Blizzard's hotfixes, staff (blue) posts and news, and changes in the game's data that touch your quests, zone, gear, bags, spells, professions or class, found on your computer within seconds and announced once; a short explanation from the adviser on request |
 | Route | The next stop for the quests you carry |
 | Where to level | Zones and dungeons for your next five levels, with quieter alternatives |
 | Quest check | Is this quest bugged, changed, or am I missing something? Verdicts come with a quoted source |
@@ -84,8 +84,9 @@ flowchart LR
   searches the web: who gives and takes a quest, where an NPC stands and what it sells, where an item drops and how
   often, a spell's coefficients. The project builds the dataset once for everybody and the companion downloads it
   after the same one-time Battle.net sign-in.
-- **What changed** needs no adviser. The companion reads Blizzard's hotfix notes itself, resolves the quests, items,
-  spells and places they name to game IDs through the world dataset, and compares them, together with the data
+- **What changed** needs no adviser. The companion reads Blizzard's hotfix notes, the staff posts on the WoW Forever
+  forums and Blizzard's news about Forever itself, resolves the quests, items, spells and places they name to game IDs
+  through the world dataset, and compares them, together with the data
   changes the project's backend finds in the game client's tables, with your quest log, zone, gear, bags, spells and
   professions. Notes about another class, another race or content far above your level are left out. The adviser
   only writes the short explanation you ask for, from that shortlist.
@@ -131,9 +132,10 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 - Once a day the companion downloads the files of the world dataset that changed from the same server. Cloudflare
   sees your IP address, the server sees the sign-in key, and nothing else is sent. The dataset stays on your disk.
 - Every hour it downloads `world/changes.json` from the same server: the data changes of the last 30 days and when
-  Blizzard's hotfix article and known-issues post last changed. The companion fetches those two Blizzard pages
-  itself, and only after they changed (every three hours when that file is not there). Your character's data is
-  compared on your disk and goes nowhere.
+  Blizzard's hotfix article, known-issues post, news list and the forums' staff posts last changed. The companion
+  fetches those Blizzard pages itself (`news.blizzard.com`, `us.forums.blizzard.com`, `eu.forums.blizzard.com`), and
+  only after they changed (every three hours when that file is not there). Your character's data is compared on your
+  disk and goes nowhere.
 
 ## Setup
 
@@ -294,11 +296,14 @@ The section lists, newest first, what changed in the last two weeks that concern
   before and after. A new entry here is announced once with a notice by the minimap, a chat line and a sound, as your
   alert settings allow.
 - **For your class**: notes for your class or race.
+- **Blue posts and news**: the newest posts of Blizzard staff on the WoW Forever forums (US and EU, one copy of a post
+  that is on both) and Blizzard's news about Forever, each with its address to copy. The companion reads each new
+  forum post once, so a post whose line names something of your character joins the lists above with that line.
 
 The notes stay in Blizzard's English, with the reason they were picked in your language. *Explain briefly* asks the
-adviser for a short summary in your language from this list and the general notes; it is the only part that spends
-allowance. The adviser's tool `get_changes` reads the same matches, or what changed about any quest, item, spell or
-place it names.
+adviser for a short summary in your language from the hotfix notes and data changes in this list and the general
+notes; it is the only part that spends allowance. The adviser's tool `get_changes` reads the same matches and the
+recent posts, or what changed about any quest, item, spell or place it names.
 
 ## Known issues
 

@@ -1,0 +1,15 @@
+{"posts":[
+{"id":900001,"name":"Bluestaff","username":"Bluestaff","created_at":"2026-11-21T00:18:29.701Z","blurb":"November 20, 2026 Classes made-up...","post_number":14,"topic_id":800001},
+{"id":900002,"name":"Bluestaff","username":"Bluestaff","created_at":"2026-11-19T17:35:00.000Z","blurb":"Made-up tuning notes written for these tests. Shaman Lightning Bolt...","post_number":1,"topic_id":800002},
+{"id":900003,"name":"Bluestaff","username":"Bluestaff","created_at":"2026-11-17T18:38:00.000Z","blurb":"Player: totems in Zul'Farrak are broken. We have deployed a fix...","post_number":2,"topic_id":800003},
+{"id":900004,"name":"","username":"BlizzardEntertainment","created_at":"2026-11-18T17:00:00.000Z","blurb":"https://example.com/header.png","post_number":1,"topic_id":800004},
+{"id":900005,"name":"Bluestaff","username":"Bluestaff","created_at":"2026-11-15T15:42:00.000Z","blurb":"In this made-up thread...","post_number":1,"topic_id":800005},
+{"id":900006,"name":"Otherstaff","username":"Otherstaff","created_at":"2026-10-01T06:39:00.000Z","blurb":"Too old.","post_number":15,"topic_id":800006}
+],"topics":[
+{"id":800001,"title":"WoW: Forever Hotfixes - November 20, 2026","fancy_title":"WoW: Forever Hotfixes - November 20, 2026","category_id":352},
+{"id":800002,"title":"Class Tuning Coming Soon - Made-up","category_id":347},
+{"id":800003,"title":"Shaman totems &amp; weapons were bugged","category_id":352},
+{"id":800004,"title":"Explore the Made-up Dungeons of World of Warcraft: Forever","category_id":347},
+{"id":800005,"title":"Known Issues - WoW Forever - Made-up","category_id":352},
+{"id":800006,"title":"Too old","category_id":347}
+],"users":[],"categories":[],"tags":[],"groups":[],"grouped_search_result":{"term":"made-up"}}
