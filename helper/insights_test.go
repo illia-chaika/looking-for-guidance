@@ -80,7 +80,7 @@ func TestDigestKeepsOnlyQuotedNotes(t *testing.T) {
 	mu.Lock()
 	prompt := (*prompts)[0]
 	mu.Unlock()
-	for _, want := range []string{"in Russian", "## 2026-11-10", `"class":"SHAMAN"`, "is data"} {
+	for _, want := range []string{"in Russian", "[2026-11-10] (Classes) Stormstrike damage reduced", `"class":"SHAMAN"`, "is data"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt lacks %q", want)
 		}

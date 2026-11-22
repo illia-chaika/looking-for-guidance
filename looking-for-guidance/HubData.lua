@@ -110,6 +110,70 @@ end
 local function some(list) return #list > 0 and list or nil end
 Data.Some = some
 
+-- Game IDs for the changes feed, as one comma-joined string each: the request's list trimming would cut a table.
+local function joined(set, limit)
+    local list = {}
+    for id in pairs(set) do list[#list + 1] = id end
+    table.sort(list)
+    local out = {}
+    for index = 1, math.min(#list, limit) do out[index] = tostring(list[index]) end
+    return #out > 0 and table.concat(out, ",") or nil
+end
+
+function Data.MapID()
+    local id = allowed("location") and C_Map and call(C_Map.GetBestMapForUnit, "player")
+    return type(id) == "number" and id > 0 and id or nil
+end
+
+function Data.WornIDs()
+    if not allowed("gear") then return end
+    local set = {}
+    for slot = 1, 19 do
+        local id = call(GetInventoryItemID, "player", slot)
+        if type(id) == "number" and id > 0 then set[id] = true end
+    end
+    return joined(set, 19)
+end
+
+function Data.BagIDs()
+    if not allowed("bags") or not C_Container then return end
+    local set = {}
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        for slot = 1, call(C_Container.GetContainerNumSlots, bag) or 0 do
+            local info = call(C_Container.GetContainerItemInfo, bag, slot)
+            local id = info and clean(info.itemID)
+            if type(id) == "number" and id > 0 then set[id] = true end
+        end
+    end
+    return joined(set, 100)
+end
+
+-- Known spells, the highest rank of each (the spellbook lists ranks in order), the pet's included.
+function Data.SpellIDs()
+    if not allowed("spells") or not C_SpellBook or not Enum or not Enum.SpellBookSpellBank or not Enum.SpellBookItemType then return end
+    local byName = {}
+    local function read(slot, bank)
+        local item = call(C_SpellBook.GetSpellBookItemInfo, slot, bank)
+        local id = item and clean(item.spellID)
+        if item and clean(item.itemType) == Enum.SpellBookItemType.Spell and not clean(item.isOffSpec) and type(id) == "number" and id > 0 then
+            byName[clean(item.name) or id] = id
+        end
+    end
+    for index = 1, call(C_SpellBook.GetNumSpellBookSkillLines) or 0 do
+        local line = call(C_SpellBook.GetSpellBookSkillLineInfo, index)
+        if line and not clean(line.shouldHide) and clean(line.itemIndexOffset) and clean(line.numSpellBookItems) then
+            for slot = line.itemIndexOffset + 1, line.itemIndexOffset + line.numSpellBookItems do read(slot, Enum.SpellBookSpellBank.Player) end
+        end
+    end
+    local pet = Enum.SpellBookSpellBank.Pet
+    if pet then
+        for slot = 1, call(C_SpellBook.HasPetSpells) or 0 do read(slot, pet) end
+    end
+    local set = {}
+    for _, id in pairs(byName) do set[id] = true end
+    return joined(set, 200)
+end
+
 -- What the helper needs to tailor advice. No character name or GUID.
 function Data.Profile()
     local token = Data.Class()

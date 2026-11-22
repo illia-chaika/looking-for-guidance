@@ -59,6 +59,8 @@ type insightEnv struct {
 	Extra      string       // text of further pages the helper fetched itself
 	Auction    *auctionBook // the character's auction house, when the player set up auction prices
 	AuctionOff string       // otherwise why there are none: a code of auctionUnavailable
+	World      *worldData   // the world dataset, when the kind reads changes and the dataset is here
+	Changes    *changesFile // the backend's data changes and change signals, when downloaded
 }
 
 type insightKind struct {
@@ -70,12 +72,24 @@ type insightKind struct {
 	issues       bool // the job also reads Blizzard's known-issues thread
 	notes        bool // the answer depends on what the player asked the advisor to remember
 	auction      bool // the job reads the character's auction house
+	changes      bool // the job reads the world dataset and the backend's changes feed
 	perCharacter bool
 	schema       string
 	prompt       func(insightRequest, insightEnv) (string, error)
 	check        func(raw []byte, req insightRequest, env insightEnv) (any, error)
 	// decorate adds current facts to a ready answer each time it is shown, cached or fresh.
 	decorate func(data json.RawMessage, req insightRequest, env insightEnv) json.RawMessage
+	// local answers on this computer without the adviser: no run, no daily cap. prompt and check are then unused.
+	local func(insightRequest, insightEnv) (any, error)
+	// maxData overrides maxInsightData for a kind whose answers are larger.
+	maxData int
+}
+
+func (k *insightKind) dataLimit() int {
+	if k.maxData > 0 {
+		return k.maxData
+	}
+	return maxInsightData
 }
 
 type insightRecord struct {
@@ -105,6 +119,8 @@ type insightEngine struct {
 	// limits receives what Claude Code says about the allowance while it runs a job.
 	limits func([]payloadLimit)
 	now    func() time.Time
+	// worldDir holds the world dataset and the changes feed the tray downloads.
+	worldDir string
 
 	mu        sync.Mutex
 	character string
@@ -113,11 +129,20 @@ type insightEngine struct {
 	queue     []*insightJob
 	running   int
 	ready     bool
+	// lastLocal keeps the latest request of each local kind, so a new feed is answered without the game asking.
+	lastLocal map[string]localAnswer
+	checked   time.Time
+}
+
+type localAnswer struct {
+	req  insightRequest
+	at   time.Time
+	feed time.Time // modification time of the changes feed the answer was built on
 }
 
 func newInsightEngine(dir string, notify func(), agent func() (provider, path string)) *insightEngine {
 	e := &insightEngine{dir: dir, feedURL: defaultHotfixURL, notify: notify, agent: agent, fetch: fetchPage, now: time.Now,
-		active: map[string]bool{}}
+		active: map[string]bool{}, lastLocal: map[string]localAnswer{}, worldDir: filepath.Join(filepath.Dir(dir), "world")}
 	if url := safeWebURL(loadSettings().HotfixURL); url != "" {
 		e.feedURL = url
 	}
@@ -193,7 +218,7 @@ func (e *insightEngine) view() []insight {
 // finish publishes a result for the character who asked. A result that arrives after a character change stays on disk only.
 func (e *insightEngine) finish(job *insightJob, rec insightRecord) {
 	if rec.State == "ready" && job.kind.decorate != nil {
-		if data := job.kind.decorate(rec.Data, job.req, job.env); len(data) <= maxInsightData {
+		if data := job.kind.decorate(rec.Data, job.req, job.env); len(data) <= job.kind.dataLimit() {
 			rec.Data = data
 		}
 	}
@@ -219,6 +244,18 @@ func (e *insightEngine) basis(job *insightJob) string {
 		sum := sha1.Sum([]byte(strings.Join(job.env.Notes, "\n")))
 		basis += "+" + hex.EncodeToString(sum[:6])
 	}
+	if job.kind.changes {
+		// The same facts give the same answer only on the same dataset and the same data changes.
+		h := sha1.New()
+		h.Write(job.req.Facts)
+		if job.env.Changes != nil {
+			h.Write([]byte(job.env.Changes.Built))
+		}
+		if job.env.World != nil {
+			h.Write([]byte(job.env.World.manifest.Built))
+		}
+		basis += "+" + hex.EncodeToString(h.Sum(nil)[:6])
+	}
 	return basis
 }
 
@@ -226,11 +263,11 @@ func (e *insightEngine) basis(job *insightJob) string {
 func (e *insightEngine) resolve(job *insightJob) {
 	if job.kind.feed {
 		feed, err := loadFeed(context.Background(), e.dir, e.feedURL, e.now(), e.fetch)
-		if err != nil {
+		if err != nil && job.kind.local == nil {
 			e.finish(job, insightRecord{State: "failed", At: e.now().Unix(), Note: "hotfix list unavailable: " + oneLine(err.Error())})
 			return
 		}
-		job.env.Feed = feed
+		job.env.Feed = feed // a local answer still has the data changes without the notes
 	}
 	if job.kind.issues {
 		job.env.Extra = loadIssues(context.Background(), e.dir, defaultIssuesURL, e.now(), e.fetch)
@@ -245,6 +282,17 @@ func (e *insightEngine) resolve(job *insightJob) {
 		} else {
 			job.env.Auction, _ = loadAuctionBook(filepath.Join(auctionDir(e.dir), m.key()+".json"))
 		}
+	}
+	if job.kind.changes {
+		job.env.Changes, _ = readChanges(e.worldDir)
+		job.env.World, _ = loadWorldFrom(e.worldDir)
+	}
+	if job.kind.local != nil {
+		if job.kind.changes {
+			saveChangeFacts(e.dir, job.req)
+		}
+		e.answerLocally(job)
+		return
 	}
 	now := e.now()
 	var rec insightRecord
@@ -269,6 +317,53 @@ func (e *insightEngine) resolve(job *insightJob) {
 	e.pump(nil)
 }
 
+// answerLocally builds a local kind's answer at once. It is cheap, so it is built fresh on every request.
+func (e *insightEngine) answerLocally(job *insightJob) {
+	now := e.now()
+	rec := insightRecord{State: "ready", At: now.Unix(), Basis: e.basis(job)}
+	value, err := job.kind.local(job.req, job.env)
+	if err == nil {
+		rec.Data, err = json.Marshal(value)
+	}
+	if err == nil && len(rec.Data) > job.kind.dataLimit() {
+		err = fmt.Errorf("answer of %d bytes is too large for the game", len(rec.Data))
+	}
+	if err != nil {
+		logf("Journal %s failed: %v", job.req.Kind, err)
+		rec = insightRecord{State: "failed", At: now.Unix(), Basis: rec.Basis, Note: oneLine(err.Error())}
+	}
+	e.store(job, rec)
+	e.mu.Lock()
+	e.lastLocal[job.req.Kind] = localAnswer{req: job.req, at: now, feed: changesStamp(e.worldDir)}
+	e.mu.Unlock()
+	e.finish(job, rec)
+}
+
+// refreshLocal answers local kinds again for the active character when the changes feed moved on, or an hour after
+// the last answer (the hotfix page is then read again if the feed says it changed). The session loop calls it often.
+func (e *insightEngine) refreshLocal() {
+	now := e.now()
+	e.mu.Lock()
+	if now.Sub(e.checked) < 30*time.Second {
+		e.mu.Unlock()
+		return
+	}
+	e.checked = now
+	var again []insightRequest
+	stamp := changesStamp(e.worldDir)
+	for _, last := range e.lastLocal {
+		if last.req.Character == e.character && (stamp.After(last.feed) || now.Sub(last.at) > time.Hour) {
+			r := last.req
+			r.Force = false
+			again = append(again, r)
+		}
+	}
+	e.mu.Unlock()
+	for _, r := range again {
+		e.request(r)
+	}
+}
+
 // pump starts queued runs while Codex is signed in. The session loop reports readiness; a finished run passes nil.
 func (e *insightEngine) pump(ready *bool) {
 	e.mu.Lock()
@@ -285,6 +380,9 @@ func (e *insightEngine) pump(ready *bool) {
 	for _, job := range start {
 		go e.execute(job)
 	}
+	if ready != nil {
+		e.refreshLocal()
+	}
 }
 
 func (e *insightEngine) accept(job *insightJob, raw []byte) (insightRecord, error) {
@@ -296,7 +394,7 @@ func (e *insightEngine) accept(job *insightJob, raw []byte) (insightRecord, erro
 	if err != nil {
 		return insightRecord{}, err
 	}
-	if len(data) > maxInsightData {
+	if len(data) > job.kind.dataLimit() {
 		return insightRecord{}, fmt.Errorf("answer of %d bytes is too large for the game", len(data))
 	}
 	rec := insightRecord{State: "ready", At: e.now().Unix(), Basis: e.basis(job), Data: data}

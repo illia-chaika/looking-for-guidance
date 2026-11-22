@@ -59,6 +59,9 @@ func TestTaskToolDiscoveryAndLegacyDispatch(t *testing.T) {
 	for _, tool := range list.Result.Tools {
 		names = append(names, tool.Name)
 		props := tool.InputSchema.Properties
+		if _, ok := props["snapshot_id"]; ok == (tool.Name == "search_game_data" || tool.Name == "get_game_data") {
+			t.Fatalf("snapshot_id belongs to the snapshot tools only: %s", tool.Name)
+		}
 		if limit, ok := props["limit"]; ok {
 			if limit.Maximum != 30 || !strings.Contains(limit.Description, "1–30") || !strings.Contains(tool.Description, "next_offset") {
 				t.Fatal(tool)
@@ -68,7 +71,7 @@ func TestTaskToolDiscoveryAndLegacyDispatch(t *testing.T) {
 			}
 		}
 	}
-	want := []string{"get_context", "get_quests", "get_details", "get_talents", "get_equipment", "search_spellbook", "search_bags", "get_skills", "get_recipes", "get_buffs", "get_reputation", "get_attached_links", "get_auction_prices", "find_auction_upgrades", "get_memory", "upsert_memory", "forget_memory"}
+	want := []string{"get_context", "get_quests", "get_details", "get_talents", "get_equipment", "search_spellbook", "search_bags", "get_skills", "get_recipes", "get_buffs", "get_reputation", "get_attached_links", "get_auction_prices", "find_auction_upgrades", "search_game_data", "get_changes", "get_game_data", "get_memory", "upsert_memory", "forget_memory"}
 	slices.Sort(names)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {

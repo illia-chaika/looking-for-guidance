@@ -454,11 +454,6 @@ func TestBagTriageReadsAndShowsCurrentAuctionPrices(t *testing.T) {
 
 func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
 	fakeBattleNet(t)
-	wago := httptest.NewServer(http.NotFoundHandler())
-	t.Cleanup(wago.Close)
-	oldBuilds := wagoBuildsURL
-	wagoBuildsURL = wago.URL + "/api/builds"
-	t.Cleanup(func() { wagoBuildsURL = oldBuilds })
 
 	dir := filepath.Join(t.TempDir(), "auctions")
 	now := time.Now()
@@ -472,7 +467,7 @@ func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
 	ctx := context.Background()
 	w.refresh(ctx)
 	status := loadAuctionStatus(dir)
-	if _, err := os.Stat(filepath.Join(dir, "eu-114.json")); err != nil || status.Refused != "" || len(status.Failing) != 0 || !strings.Contains(status.Items, "404") {
+	if _, err := os.Stat(filepath.Join(dir, "eu-114.json")); err != nil || status.Refused != "" || len(status.Failing) != 0 || !strings.Contains(status.Items, "world dataset") {
 		t.Fatalf("the house is downloaded and the failing item table noted: %+v %v", status, err)
 	}
 
@@ -524,11 +519,6 @@ func fakeMirror(t *testing.T) (requests *[]string) {
 
 func TestAuctionMirrorStandsInForAMissingClient(t *testing.T) {
 	requests := fakeMirror(t)
-	wago := httptest.NewServer(http.NotFoundHandler())
-	t.Cleanup(wago.Close)
-	oldBuilds := wagoBuildsURL
-	wagoBuildsURL = wago.URL + "/api/builds"
-	t.Cleanup(func() { wagoBuildsURL = oldBuilds })
 
 	snapshots := filepath.Join(t.TempDir(), "snapshots")
 	dir := auctionDir(snapshots)
@@ -617,42 +607,6 @@ func TestANullUpgradeAnswerIsRefused(t *testing.T) {
 	p := packet{Type: "details", RequestID: id, Session: "player", RunID: "app", Upgrades: json.RawMessage("null")}
 	if err := acceptGameDetails(dir, "app", p, time.Now()); err == nil {
 		t.Fatal("a null answer is an error, not a crash")
-	}
-}
-
-func TestItemTableKeepsGearOfTheNewestBuildAndChecksDaily(t *testing.T) {
-	var asked []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asked = append(asked, r.URL.Path)
-		switch r.URL.Path {
-		case "/api/builds":
-			fmt.Fprint(w, `{"wowf":[{"version":"1.60.1.71037"},{"version":"1.60.1.70959"}],"wow":[{"version":"12.1.5.1"}]}`)
-		case "/db2/Item/csv":
-			if r.URL.Query().Get("build") != "1.60.1.71037" {
-				http.NotFound(w, r)
-				return
-			}
-			fmt.Fprint(w, "ID,ClassID,SubclassID,Material,InventoryType\n14158,4,1,7,20\n2589,7,5,7,0\n1811,2,8,1,17\n")
-		}
-	}))
-	t.Cleanup(srv.Close)
-	oldBuilds, oldTable := wagoBuildsURL, wagoTableURL
-	wagoBuildsURL, wagoTableURL = srv.URL+"/api/builds", func(table, build string) string { return srv.URL + "/db2/" + table + "/csv?build=" + build }
-	t.Cleanup(func() { wagoBuildsURL, wagoTableURL = oldBuilds, oldTable })
-
-	dir := t.TempDir()
-	now := time.Now()
-	w := testWatcher(dir, now)
-	if err := w.refreshItems(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	table, err := loadItemTable(dir)
-	if err != nil || table.Build != "1.60.1.71037" || len(table.Items) != 2 || table.Items[14158] != [3]int{4, 1, 20} || table.Items[1811][2] != 17 {
-		t.Fatalf("gear only, of the newest build: %+v %v", table, err)
-	}
-	asked = nil
-	if err := w.refreshItems(context.Background()); err != nil || len(asked) != 0 {
-		t.Fatal("checked again within a day:", asked, err)
 	}
 }
 

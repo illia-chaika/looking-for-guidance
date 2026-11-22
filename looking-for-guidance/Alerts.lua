@@ -28,7 +28,7 @@ local function toast()
     frame:SetScript("OnLeave", function(self) self.close:SetInk("ink-3") end)
     frame:SetScript("OnClick", function(self)
         Kit.Leave(self)
-        T.Window.Show(self.id)
+        if self.open then self.open() else T.Window.Show(self.id) end
     end)
     Kit.Tip(frame, frame.title)
     frame:Hide()
@@ -60,10 +60,10 @@ local function show(thread, line)
         frame = #toasts < TOAST.stack and toast() or table.remove(toasts, 1)
         table.insert(toasts, frame)
     end
-    frame.id = thread.id
-    T.SetContent(frame.title, Format.Escape(Store.Title(thread)))
+    frame.id, frame.open = thread.id, thread.open
+    T.SetContent(frame.title, Format.Escape(thread.open and thread.title or Store.Title(thread)))
     frame.line:SetText(line)
-    frame.stripe:SetShown(Store.Rank(thread) == 0)
+    frame.stripe:SetShown(not thread.open and Store.Rank(thread) == 0)
     Kit.Paint(frame.stripe, thread.state == "error" and "agent-error" or "agent-needs")
     if frame.timer then
         frame.timer:Cancel()
@@ -86,6 +86,19 @@ local function alert(thread, line, words)
     show(thread, line)
     if T.settings.alertChat then
         chat(thread, words)
+    end
+    if T.settings.alertSound then
+        PlaySound(SOUNDKIT.TELL_MESSAGE)
+    end
+end
+
+-- A journal notice in the same look: a toast that opens what it announces, the chat line and the sound the
+-- settings allow.
+function Alerts.Notice(id, title, line, words, open)
+    show({ id = "notice:" .. id, title = title, open = open }, line)
+    if T.settings.alertChat and DEFAULT_CHAT_FRAME and ChatTypeInfo then
+        local whisper = ChatTypeInfo.WHISPER
+        DEFAULT_CHAT_FRAME:AddMessage("Looking for Guidance: " .. words, whisper.r, whisper.g, whisper.b)
     end
     if T.settings.alertSound then
         PlaySound(SOUNDKIT.TELL_MESSAGE)

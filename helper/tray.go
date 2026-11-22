@@ -96,6 +96,7 @@ func (a *app) trayReady() {
 	}
 	go a.loop()
 	go a.watchAuctions()
+	go a.watchWorld()
 	go a.noteAuctionClient()
 	go a.checkUpdates()
 

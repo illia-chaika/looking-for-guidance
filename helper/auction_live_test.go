@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,10 @@ func TestLiveAuction(t *testing.T) {
 	}
 	if changed, err := w.update(context.Background(), w.bn, m); err != nil || changed {
 		t.Fatal("the same snapshot is not downloaded twice:", changed, err)
+	}
+	world := &worldWatcher{dir: worldDir(w.dir), http: http.DefaultClient, base: func() string { return defaultWorldMirror }, now: time.Now}
+	if err := world.refresh(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 	if err := w.refreshItems(context.Background()); err != nil {
 		t.Fatal(err)

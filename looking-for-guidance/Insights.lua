@@ -12,6 +12,10 @@ function Insights.Automatic()
     return T.settings ~= nil and T.settings.research == "auto"
 end
 
+-- Kinds the helper answers on the Mac without the adviser: free, so they are asked without the research setting
+-- and also while the adviser is signed out.
+Insights.LOCAL = { changes = true }
+
 -- About twelve seconds of sending at most: a bag list with tooltip texts is the largest request.
 local BUDGET = 4500
 local wanted, deferred = {}, {}
@@ -83,8 +87,9 @@ end
 -- options.auto marks a request the player pressed no button for, sent only when research is automatic.
 function Insights.Request(kind, key, facts, options)
     options = options or {}
-    if options.auto and not Insights.Automatic() then return false end
-    if not T.Store.received or T.Store.codex == "offline" or T.Store.codex == "restart" then return false end
+    local free = Insights.LOCAL[kind]
+    if options.auto and not Insights.Automatic() and not free then return false end
+    if not T.Store.received or (not free and (T.Store.codex == "offline" or T.Store.codex == "restart")) then return false end
     local state = Insights.State(kind, key)
     if not options.force and (state == "ready" or state == "pending") then return true end
     if type(InCombatLockdown) == "function" and InCombatLockdown() then

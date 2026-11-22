@@ -3,36 +3,28 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Auction upgrades: the helper picks the auctions for one equipment slot within the player's budget, the game says
 // which the character can wear and what each variant gives, and the adviser weighs them for the class. Slot and
-// item class come from the client's own Item table as wago.tools publishes it, downloaded at run time and kept
-// in the settings folder only: Blizzard's item API misses most older gear.
+// item class come from the client's Item table numbers in the world dataset (world.go).
 
 const (
 	upgradeTimeout     = 60 * time.Second
 	maxUpgradeItems    = 400 // items sent to the game per search
 	maxUpgradeVariants = 6   // random-suffix variants per item
-	itemTableEvery     = 24 * time.Hour
-)
-
-var (
-	wagoBuildsURL = "https://wago.tools/api/builds"
-	wagoTableURL  = func(table, build string) string { return "https://wago.tools/db2/" + table + "/csv?build=" + build }
 )
 
 // Inventory types of the client's Item table per slot the adviser can name.
@@ -42,7 +34,8 @@ var upgradeSlots = map[string][]int{
 	"main_hand": {13, 17, 21}, "off_hand": {13, 14, 22, 23}, "ranged": {15, 25, 26, 28},
 }
 
-// itemTable is the gear of one game build: class, subclass and inventory type by item ID.
+// itemTable is the gear in the world dataset: class, subclass and inventory type by item ID. Build names the dataset's
+// item files it was made from.
 type itemTable struct {
 	Build string         `json:"build"`
 	Items map[int][3]int `json:"items"`
@@ -57,100 +50,61 @@ func loadItemTable(dir string) (*itemTable, error) {
 	return &t, json.Unmarshal(data, &t)
 }
 
-// refreshItems keeps items.json at the newest WoW: Forever build wago.tools knows, checking once a day.
+// refreshItems keeps items.json in step with the world dataset (world.go): class, subclass and inventory type of every
+// weapon and armour piece, from the game client's numbers. It rebuilds the table when the dataset's item files change.
 func (w *auctionWatcher) refreshItems(ctx context.Context) error {
-	path := filepath.Join(w.dir, "items.json")
-	if info, err := os.Stat(path); err == nil && w.now().Sub(info.ModTime()) < itemTableEvery {
+	dir := worldDir(w.dir)
+	m, err := readWorldManifest(dir)
+	if err != nil {
+		return errors.New("the world dataset is not downloaded yet")
+	}
+	var parts []string
+	for _, f := range m.Files {
+		if f.Kind == "items" {
+			parts = append(parts, path.Base(f.Path))
+		}
+	}
+	if len(parts) == 0 {
+		return errors.New("the world dataset has no items")
+	}
+	key := strings.Join(parts, " ")
+	if old, err := loadItemTable(w.dir); err == nil && old.Build == key {
 		return nil
 	}
-	body, err := w.fetch(ctx, wagoBuildsURL)
-	if err != nil {
-		return err
+	t := &itemTable{Build: key, Items: map[int][3]int{}}
+	for _, name := range parts {
+		var part struct {
+			Records map[string]struct {
+				Client struct {
+					Class         *int `json:"class"`
+					Subclass      int  `json:"subclass"`
+					InventoryType int  `json:"inventory_type"`
+				} `json:"client"`
+			} `json:"records"`
+		}
+		if err := readGzipJSON(filepath.Join(dir, name), &part); err != nil {
+			return fmt.Errorf("the world dataset's %s: %w", name, err)
+		}
+		for id, r := range part.Records {
+			c := r.Client
+			n, err := strconv.Atoi(id)
+			if err != nil || c.Class == nil || (*c.Class != 2 && *c.Class != 4) {
+				continue
+			}
+			t.Items[n] = [3]int{*c.Class, c.Subclass, c.InventoryType}
+		}
 	}
-	var builds map[string][]struct {
-		Version string `json:"version"`
+	if len(t.Items) == 0 {
+		return errors.New("the world dataset lists no gear")
 	}
-	err = json.NewDecoder(io.LimitReader(body, 16<<20)).Decode(&builds)
-	body.Close()
-	if err != nil || len(builds["wowf"]) == 0 {
-		return fmt.Errorf("wago.tools lists no WoW: Forever build: %v", err)
-	}
-	build := builds["wowf"][0].Version
-	if old, err := loadItemTable(w.dir); err == nil && old.Build == build {
-		now := w.now()
-		return os.Chtimes(path, now, now)
-	}
-	body, err = w.fetch(ctx, wagoTableURL("Item", build))
-	if err != nil {
-		return err
-	}
-	defer body.Close()
-	table, err := parseItemTable(io.LimitReader(body, 64<<20))
-	if err != nil {
-		return err
-	}
-	table.Build = build
-	data, err := json.Marshal(table)
+	data, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(w.dir, 0o700); err != nil {
 		return err
 	}
-	return writeFileAtomic(path, data)
-}
-
-func (w *auctionWatcher) fetch(ctx context.Context, url string) (io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "looking-for-guidance/"+version)
-	resp, err := w.bn.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("%s answered %s", url, resp.Status)
-	}
-	return resp.Body, nil
-}
-
-// parseItemTable keeps weapons (class 2) and armour (class 4) from the Item table's CSV.
-func parseItemTable(r io.Reader) (*itemTable, error) {
-	rows := csv.NewReader(r)
-	head, err := rows.Read()
-	if err != nil {
-		return nil, err
-	}
-	col := map[string]int{}
-	for i, name := range head {
-		col[name] = i
-	}
-	for _, name := range []string{"ID", "ClassID", "SubclassID", "InventoryType"} {
-		if _, ok := col[name]; !ok {
-			return nil, fmt.Errorf("the Item table has no %s column", name)
-		}
-	}
-	t := &itemTable{Items: map[int][3]int{}}
-	for {
-		row, err := rows.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		num := func(name string) int { n, _ := strconv.Atoi(row[col[name]]); return n }
-		if class := num("ClassID"); class == 2 || class == 4 {
-			t.Items[num("ID")] = [3]int{class, num("SubclassID"), num("InventoryType")}
-		}
-	}
-	if len(t.Items) == 0 {
-		return nil, errors.New("the Item table lists no gear")
-	}
-	return t, nil
+	return writeFileAtomic(filepath.Join(w.dir, "items.json"), data)
 }
 
 type upgradeQuery struct {

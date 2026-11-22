@@ -86,6 +86,7 @@ func readFacts(req insightRequest, into any) error {
 }
 
 var insightKinds = map[string]*insightKind{
+	"changes":  changesKind,
 	"digest":   digestKind,
 	"quest":    questKind,
 	"brief":    briefKind,
@@ -113,8 +114,10 @@ type digestData struct {
 	Fetched  int64        `json:"fetched"`
 }
 
+// "What changed for me", the short version the player asks for: the notes were matched to the character by IDs
+// first (changesKind), so the adviser reads a shortlist and only judges and explains.
 var digestKind = &insightKind{
-	version: "digest-1", effort: "low", ttl: 24 * time.Hour, feed: true, perCharacter: true,
+	version: "digest-2", effort: "low", ttl: 24 * time.Hour, feed: true, changes: true, perCharacter: true,
 	schema: `{"type":"object","additionalProperties":false,"required":["headline","items"],"properties":{
 "headline":{"type":"string"},
 "items":{"type":"array","items":{"type":"object","additionalProperties":false,
@@ -126,20 +129,22 @@ var digestKind = &insightKind{
 		if err := readFacts(req, &facts); err != nil {
 			return "", err
 		}
+		// The ID lists only served the matching; the adviser reads the profile and the matched notes.
+		profile, _ := json.Marshal(facts)
 		return insightPreamble(req) +
-			"Task: from Blizzard's hotfix notes pick what matters to this character and say why.\n" +
-			"Character (JSON): " + string(req.Facts) + "\n\n" +
+			"Task: from Blizzard's hotfix notes below, already matched to this character by game IDs, pick what matters most to this character and say why.\n" +
+			"Character (JSON): " + string(profile) + "\n\n" +
 			"Rules:\n" +
-			`- relevance "direct": the note names the character's class, a spell or talent of that class, one of their professions, a quest in their log (match by title) or the zone they are in.` + "\n" +
-			`- relevance "related": a general change that affects a character of this level: dungeon experience, rested experience, gold, travel, camps, food.` + "\n" +
-			"- Skip notes about other classes, raids, PvP and max-level content unless this character is clearly affected.\n" +
+			`- relevance "direct": a note from the first two lists (it names the character's quest, zone, item, spell, profession, class or race), when it really affects this character: a fix for another race's ability or for content far above the character's level does not.` + "\n" +
+			`- relevance "related": a general note that affects a character of this level: dungeon experience, rested experience, gold, travel, camps, food.` + "\n" +
+			"- Skip raids, PvP and max-level content unless this character is clearly affected.\n" +
 			"- At most 8 items, the most important first. When nothing applies, return an empty list and say so in the headline.\n" +
 			`- "quote": one sentence copied verbatim from the notes, in English, unchanged. An item whose quote is not in the notes is discarded.` + "\n" +
 			`- "text": what changed, one sentence. "why": why this character should care, one sentence.` + "\n" +
 			`- "date": the YYYY-MM-DD heading the note stands under. "category": its section heading, e.g. Classes, Quests, Professions.` + "\n" +
 			`- "quest_id": the id from the character's quest list when the note is about that quest, otherwise 0.` + "\n" +
-			`- "headline": one short sentence summing up the list.` + "\n\n" +
-			"Hotfix notes, newest first (" + env.Feed.URL + "):\n" + env.Feed.newest(7), nil
+			`- "headline": one short sentence summing up the list; it may mention the data changes below.` + "\n\n" +
+			"Matched notes and data changes, newest first (notes from " + env.Feed.URL + "):\n\n" + changeShortlist(req, env), nil
 	},
 	check: func(raw []byte, req insightRequest, env insightEnv) (any, error) {
 		var facts profileFacts

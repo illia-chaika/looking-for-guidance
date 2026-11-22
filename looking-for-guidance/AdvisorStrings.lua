@@ -3,6 +3,9 @@ local _, T = ...
 T.AddLocaleRows({
     ["Рецепты"]={"Recipes","Rezepte","Recettes","Recetas","Receitas","제조법","配方","配方"},
     ["Аукцион"]={"Auction house","Auktionshaus","Hôtel des ventes","Casa de subastas","Casa de leilões","경매장","拍卖行","拍賣場"},
+    ["Поиск в базе мира"]={"World data search","Suche in den Weltdaten","Recherche dans les données du monde","Búsqueda en los datos del mundo","Busca nos dados do mundo","월드 데이터 검색","搜索世界数据","搜尋世界資料"},
+    ["Изменения в игре"]={"Game changes","Änderungen im Spiel","Changements du jeu","Cambios en el juego","Mudanças no jogo","게임 변경 사항","游戏改动","遊戲改動"},
+    ["База мира"]={"World data","Weltdaten","Données du monde","Datos del mundo","Dados do mundo","월드 데이터","世界数据","世界資料"},
     ["Подбор на аукционе"]={"Auction upgrades","Auktionshaus-Upgrades","Améliorations à l’hôtel des ventes","Mejoras en la subasta","Melhorias no leilão","경매장 업그레이드","拍卖行装备提升","拍賣場裝備提升"},
     ["Поиск без подтверждения"]={"Search returned no confirmed source","Suche ohne bestätigte Quelle","Recherche sans source confirmée","Búsqueda sin fuente confirmada","Busca sem fonte confirmada","확인된 검색 출처 없음","搜索未返回已确认的来源","搜尋未傳回已確認的來源"},
     ["Местоположение"]={"Location","Standort","Position","Ubicación","Localização","위치","位置","位置"},

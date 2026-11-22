@@ -32,7 +32,7 @@ research is prepared when you press the section's button — or by itself, if yo
 | Section | What you get |
 | --- | --- |
 | Check-up | Unspent talent points, spells waiting at the trainer, empty slots, worn gear, missing food buff, profession caps |
-| What changed | Blizzard's hotfixes that touch your class, professions, zone or quest log — each with the exact quote |
+| What changed | Blizzard's hotfixes and changes in the game's data that touch your quests, zone, gear, bags, spells, professions or class, found on your computer within seconds and announced once; a short explanation from the adviser on request |
 | Route | The next stop for the quests you carry |
 | Where to level | Zones and dungeons for your next five levels, with quieter alternatives |
 | Quest check | Is this quest bugged, changed, or am I missing something? Verdicts come with a quoted source |
@@ -79,7 +79,15 @@ flowchart LR
   or [Claude Code](https://code.claude.com/docs/en/setup). You choose one in the companion's menu and everything
   goes to it — chats and journal research alike. Either way the agent is confined to the adviser's role: it reads
   character data through a local MCP server, searches the web and reads pages, and can do nothing else. Nothing but
-  the question and the tool results it asks for leaves the computer — apart from the auction download below.
+  the question and the tool results it asks for leaves the computer — apart from the downloads below.
+- **World data.** The adviser looks up quests, NPCs, items, spells and places in a dataset on your disk before it
+  searches the web: who gives and takes a quest, where an NPC stands and what it sells, where an item drops and how
+  often, a spell's coefficients. The project builds the dataset once for everybody and the companion downloads it.
+- **What changed** needs no adviser. The companion reads Blizzard's hotfix notes itself, resolves the quests, items,
+  spells and places they name to game IDs through the world dataset, and compares them, together with the data
+  changes the project's backend finds in the game client's tables, with your quest log, zone, gear, bags, spells and
+  professions. Notes about another class, another race or content far above your level are left out. The adviser
+  only writes the short explanation you ask for, from that shortlist.
 - **Journal research** runs as hidden one-shot jobs with a fixed output schema. The companion validates every answer
   in Go — quotes must appear in the fetched text, IDs must be ones the game sent, links must be `https` — and caches
   it on disk.
@@ -89,12 +97,14 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 ## Cost and privacy
 
 - Advice uses **your own** subscription: a Claude plan through Claude Code, or a ChatGPT plan through the Codex CLI.
-  One of them is enough. There is no account to create; the project's only server is the auction mirror below.
+  One of them is enough. There is no account to create; the project's only servers are the auction mirror and the
+  world dataset below.
 - What is sent to the model: your question, and the sections of the character snapshot the agent requests. You
   choose the allowed sections in *Settings → Character data*.
 - Journal research spends the same allowance, so by default it runs **only when you press a button** in a section.
-  *Settings → Advisor* has the switch to *Automatic*: then the hotfix digest and class advice are prepared after
-  login and the other sections when you open them. The same page sets how many research jobs may run in a day
+  *Settings → Advisor* has the switch to *Automatic*: then class advice is prepared after login and the other
+  sections when you open them. *What changed* is matched on your computer and spends nothing, so it is checked after
+  every login and again when something changes; only its short explanation is research. The same page sets how many research jobs may run in a day
   (60 unless you change it, 200 at most). Answers are cached on disk, so asking again for the same thing is free
   until the answer goes stale.
 - The chat footer's tooltip shows which adviser answers and how much of its allowance is left, when the provider
@@ -106,8 +116,13 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
   for; the mirror's own code stores nothing about requests. With your own Battle.net API client the companion asks
   Blizzard directly instead, and `"auctionMirror": "off"` in `settings.json` stops the mirror altogether. Either way
   the companion asks for nothing but your market's snapshot (region, ruleset and faction pick it); no character
-  data is sent. For upgrade searches it also downloads the game's item table (item class and equipment slot) from
-  [wago.tools](https://wago.tools) once a day. Prices, their history and the table stay on your disk.
+  data is sent. Prices and their history stay on your disk.
+- Once a day the companion downloads the files of the world dataset that changed from `data.lfguidance.com`, files
+  that Cloudflare serves; Cloudflare sees your IP address and nothing else is sent. The dataset stays on your disk.
+- Every hour it downloads `world/changes.json` from the same address: the data changes of the last 30 days and when
+  Blizzard's hotfix article and known-issues post last changed. The companion fetches those two Blizzard pages
+  itself, and only after they changed (every three hours when that file is not there). Your character's data is
+  compared on your disk and goes nowhere.
 
 ## Setup
 
@@ -199,8 +214,7 @@ on Windows) and a price history for 30 days, the longest Blizzard's API terms al
 compressed), and offers the adviser two
 tools: `get_auction_prices` for the price of named items, and `find_auction_upgrades`, which picks the auctions for one
 equipment slot within a budget and lets the running game drop what the character cannot wear and read each
-candidate's exact stats. For that search the companion also keeps the game's item table from wago.tools, checked once
-a day.
+candidate's exact stats. For that search it takes each item's class and equipment slot from the world dataset.
 
 To see that it works, look for `Auction house EU Normal Horde (house 114): new snapshot downloaded`, with your own
 market, in `helper.log` beside `settings.json`; the journal's Bags section then shows prices with the snapshot's time.
@@ -220,6 +234,43 @@ which the adviser passes on in your language; the Bags section says it in one li
 To stop using your own client, choose *Own Battle.net API client* again and confirm: the companion removes it from the
 credential store and goes back to the mirror. With `"auctionMirror": "off"` as well, nothing is downloaded. Prices
 already downloaded stay on your disk.
+
+### World data
+
+The adviser's tools `search_game_data` and `get_game_data` answer from a dataset of WoW Forever's quests, NPCs, items,
+spells and places. Search finds records by name in any game language, by ID, or by zone, level range, faction and
+role (quests of a zone for your level, trainers in a city, rares of a zone), with a few facts beside each result to
+tell same-named ones apart. A record says what each source knows about it, labelled by source, with the names of
+the items, NPCs, spells and quests it refers to:
+
+- **Blizzard's Game Data API**: item names in every game language, stats, weapon damage and the spells items cast;
+  quest titles in every language, descriptions and rewards.
+- **The game client's tables**, numbers only, as [wago.tools](https://wago.tools) publishes them: item levels,
+  prices and slots, spell effects with their coefficients, cast times, ranges, cooldowns, costs and reagents.
+- **[ForeverDB.net](https://foreverdb.net)**: what its players' add-on recorded in WoW Forever — where NPCs stand,
+  what vendors sell and for how much, drop chances, who gives and takes quests, new Forever quests, flight times —
+  together with Classic data from CMaNGOS where Forever's is missing, labelled as Classic.
+
+The project's backend fetches each source once for everybody, merges them by game ID, and publishes the result at
+`data.lfguidance.com` (about 7 MB compressed). The companion checks it once a day and downloads only the files
+that changed into the `world` folder beside `settings.json`. It needs nothing from you; until the first download
+the tools say so and the adviser uses other sources. Blizzard's terms allow its data to be kept for 30 days: a
+stored copy whose Blizzard data has grown older than that is deleted.
+
+### What changed
+
+The section lists, newest first, what changed in the last two weeks that concerns your character:
+
+- **For you**: hotfix notes that name a quest in your log, your zone, an item you wear or carry, a spell you know or
+  one of your professions, and changes to your items and spells found in the game client's data, with the numbers
+  before and after. A new entry here is announced once with a notice by the minimap, a chat line and a sound, as your
+  alert settings allow.
+- **For your class**: notes for your class or race.
+
+The notes stay in Blizzard's English, with the reason they were picked in your language. *Explain briefly* asks the
+adviser for a short summary in your language from this list and the general notes; it is the only part that spends
+allowance. The adviser's tool `get_changes` reads the same matches, or what changed about any quest, item, spell or
+place it names.
 
 ## Known issues
 
@@ -268,12 +319,15 @@ python3 test/install_quiesce.py && python3 test/install_addon_payload.py
 Three checks talk to the real world and are off by default:
 
 - `FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper` runs one journal research job against the real
-  agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too). It spends allowance.
+  agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too; `digest` reads the
+  shortlist the world dataset in your settings folder allows). It spends allowance.
   Add `FOREVER_LIVE_AGENT=claude` to run it through Claude Code, and `FOREVER_MARKET="EU PvE Horde"` to give the
   `bags` job a real auction house first (needs the Battle.net client stored through *Own Battle.net API client*).
 - `FOREVER_AUCTION="EU PvE Horde" go test -run TestLiveAuction -v ./helper` downloads that auction house with the
-  Battle.net client stored through *Own Battle.net API client* and checks the summary. The other tests keep their
-  client in memory and never touch the credential store.
+  Battle.net client stored through *Own Battle.net API client* and checks the summary and the item table taken from
+  the world dataset. The other tests keep their client in memory and never touch the credential store.
+- `FOREVER_WORLD=1 go test -run TestLiveWorld -v ./helper` downloads the world dataset from `data.lfguidance.com` and
+  looks up a quest, an NPC, an item, a spell and a dungeon through the adviser's tools.
 - `FOREVER_FRAMES=/Volumes/GameDisk go test -run TestFrameSoak -v ./helper` writes `AddOns.txt` to a temporary
   folder on that disk the way the game does and reads it with the companion's own watcher.
 
@@ -289,6 +343,9 @@ referenced by path.
 Looking for Guidance is free software under the [GNU General Public License v3.0](LICENSE). It is a modified version
 of [thott.bot chat 0.4.5](https://github.com/thott-bot/chat/releases/tag/v0.4.5), Copyright © 2026 Eden Blue
 Ventures LLC; [NOTICE.md](NOTICE.md) lists what changed and the licences of bundled fonts and emoji.
+
+The world dataset contains data from ForeverDB.net (https://foreverdb.net), under the GNU General Public License v3.0
+with ForeverDB's attribution term, and data from Blizzard Entertainment's Game Data API and game client.
 
 World of Warcraft and Blizzard Entertainment are trademarks or registered trademarks of Blizzard Entertainment, Inc.
 This project is not affiliated with or endorsed by Blizzard Entertainment.

@@ -37,6 +37,7 @@ local gameActivity = {
     get_equipment = "Проверяю экипировку", search_bags = "Ищу в сумках",
     get_attached_links = "Смотрю вложения", get_skills = "Проверяю навыки",
     get_recipes = "Рецепты", get_auction_prices = "Аукцион", find_auction_upgrades = "Подбор на аукционе",
+    search_game_data = "Поиск в базе мира", get_game_data = "База мира", get_changes = "Изменения в игре",
     get_buffs = "Проверяю эффекты", get_reputation = "Проверяю репутацию",
 }
 

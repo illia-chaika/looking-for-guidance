@@ -64,6 +64,12 @@ func (a activityArgs) label(tool string) string {
 		return "Аукцион"
 	case "find_auction_upgrades":
 		return "Подбор на аукционе"
+	case "search_game_data":
+		return "Поиск в базе мира"
+	case "get_game_data":
+		return "База мира"
+	case "get_changes":
+		return "Изменения в игре"
 	case "get_memory":
 		return "Память персонажа"
 	case "upsert_memory":

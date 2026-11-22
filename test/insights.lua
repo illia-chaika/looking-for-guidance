@@ -1,5 +1,5 @@
--- Journal research: nothing unasked by default; with automatic research one request after login, a small load
--- budget, the news card and its badge.
+-- Journal research: nothing unasked by default except the free changes check after login, a small load budget,
+-- the news card with its ID matches, its short explanation on request, its notice and its badge.
 local here = arg[0]:match("^(.*)[/\\][^/\\]+$") or "."
 local samples
 local function start(saved)
@@ -30,8 +30,10 @@ assert(#sentInsights(wow) == 0, "nothing is asked while the world is still loadi
 local loads = #wow.loaded
 wow.Run(9)
 local asked = sentInsights(wow)
-assert(#asked == 1 and asked[1].kind == "digest" and asked[1].key == "me", "one digest request follows the login")
+assert(#asked == 1 and asked[1].kind == "changes" and asked[1].key == "me", "one changes check follows the login")
 assert(asked[1].facts.class == "MAGE" and asked[1].facts.level == 33 and asked[1].facts.quests[1].id == 676, "it carries the character's class, level and quests")
+assert(asked[1].facts.map == 1417 and asked[1].facts.gear == "15275" and asked[1].facts.bags == "8079",
+    "and game IDs as strings, which the packet trimming cannot cut: the map, worn and carried items")
 assert(asked[1].facts.name == nil and asked[1].locale == "enUS" and asked[1].gameLocale == "ruRU")
 assert(asked[1].cap == 60, "the daily cap from the settings travels with the request")
 assert(asked[1].market.faction == "Alliance" and asked[1].market.region == nil, "the market goes along, with what the client knows of it")
@@ -40,7 +42,7 @@ assert(T.Store.Tracked(asked[1].seq), "a background request is confirmed like a 
 local pending = CopyTable(ready)
 pending.rev = ready.rev + 1
 pending.acks = { [T.Transport.session] = { asked[1].seq } }
-pending.insights = { { kind = "digest", key = "me", state = "pending", since = time() } }
+pending.insights = { { kind = "changes", key = "me", state = "pending", since = time() } }
 wow.payload = pending
 wow.Run(400)
 assert(#wow.loaded - loads == 3, "a background request spends three loads at most, however long the helper takes: " .. (#wow.loaded - loads))
@@ -52,22 +54,35 @@ assert(card.rows[1].kind == "pending" and not card.signal, "the card shows that 
 
 local done = CopyTable(pending)
 done.rev = pending.rev + 1
-done.insights = { { kind = "digest", key = "me", state = "ready", at = time(), data = {
-    headline = "Two changes for your mage", newest = "2026-11-11", url = "https://news.blizzard.com/en-us/article/24315281",
-    items = {
-        { date = "2026-11-09", category = "Dungeons", text = "Dungeon kill experience is up by 50%.", why = "You are level 33.", relevance = "related", quote = "…", quest_id = 0 },
-        { date = "2026-11-06", category = "Classes", text = "Arcane Blast lasts 18 seconds.", why = "You are a mage.", relevance = "direct", quote = "…", quest_id = 0 },
-    } } } }
+done.insights = { { kind = "changes", key = "me", state = "ready", at = time(), data = {
+    newest = "2026-11-11", url = "https://news.blizzard.com/en-us/article/24315281", key = "k1", general = 3, data = true,
+    mine = {
+        { date = "2026-11-09", category = "Quests", text = "There are now more Defias for the quest.", kind = "note", reason = "quest", name = "The Defias Brotherhood" },
+        { date = "2026-11-08", kind = "data", reason = "item", name = "Staff of Jordan", id = 15275, fields = { { "item_level", "61", "60" }, { "stats", "", "" } } },
+    },
+    class = { { date = "2026-11-06", category = "Classes", text = "Arcane Blast lasts 18 seconds.", kind = "note", reason = "class", name = "Mage" } },
+} } }
 wow.payload = done
 T.Sync.Check()
 card = hub.Cards(hub.Model({})).news
-assert(card.title == "Two changes for your mage" and card.reason == "Changes for you: 2" and card.kicker == "Hotfixes from 11.11")
-assert(card.rows[1].text == "Concerns you directly" and card.rows[2].title == "Arcane Blast lasts 18 seconds." and card.rows[2].value == "6.11")
-assert(card.rows[3].text == "Good to know" and card.rows[5].kind == "sources" and card.rows[5].list[1].url:find("blizzard", 1, true))
-assert(card.persist and card.signal == "2026-11-11:2:2026-11-09")
+assert(card.title == "What’s new" and card.reason == "Changes for you: 2" and card.kicker == "Hotfixes from 11.11")
+assert(card.rows[1].text == "Concerns you directly" and card.rows[2].title == "There are now more Defias for the quest."
+    and card.rows[2].text == "Quest in your log: The Defias Brotherhood" and card.rows[2].value == "9.11")
+assert(card.rows[3].title == "Staff of Jordan" and card.rows[3].text == "Your item: Staff of Jordan\nItem level: 61 → 60\nStats changed",
+    "a data change shows what changed with the numbers")
+assert(card.rows[4].text == "For your class" and card.rows[5].text == "Your class" and card.rows[6].kind == "sources")
+assert(card.rows[7].kind == "actions" and card.rows[7].actions[1].label == "Explain briefly" and card.rows[7].actions[2].label == "Check now")
+assert(card.persist and card.signal == "k1")
+local toasts = #wow.frames
 hub.Observe(hub.Cards(hub.Model({})))
 assert(hub.UnreadCount() == 1 and #wow.chat == 1 and wow.chat[1]:find("New hotfixes concern your character (2)", 1, true),
     "news that arrived unprompted is unread on first sight and is announced once in chat")
+local function visible(text)
+    for _, f in ipairs(wow.texts) do if f:IsVisible() and f:GetText() == text then return f end end
+end
+assert(visible("Changes for you: 2"), "and with a toast")
+hub.Observe(hub.Cards(hub.Model({})))
+assert(#wow.chat == 1, "only once")
 
 -- Opening the topic reads it. The page shows the list and a copyable source.
 T.Window.Show()
@@ -76,12 +91,8 @@ local function button(text)
         if f:IsVisible() and f.label and f.label.GetText and f.label:GetText() == text and f:GetScript("OnClick") then return f end
     end
 end
-local function visible(text)
-    for _, f in ipairs(wow.texts) do if f:IsVisible() and f:GetText() == text then return f end end
-end
-assert(visible("Two changes for your mage"), "the news leads the overview")
 button("Open changes"):Fire("OnClick")
-assert(visible("Arcane Blast lasts 18 seconds.") and visible("You are a mage.") and visible("Concerns you directly"))
+assert(visible("There are now more Defias for the quest.") and visible("Quest in your log: The Defias Brotherhood") and visible("Concerns you directly"))
 assert(hub.UnreadCount() == 0, "an opened card is read")
 local source = button("news.blizzard.com · WoW: Forever Hotfixes")
 assert(source, "the source is listed by host and title")
@@ -90,11 +101,25 @@ local copy
 for _, f in ipairs(wow.frames) do if f.edit and f.heading and f:IsVisible() then copy = f end end
 assert(copy and copy.edit:GetText() == "https://news.blizzard.com/en-us/article/24315281", "its address is selected for copying")
 
--- "Check now" asks again past the cache and is watched on screen.
+-- The short explanation is the adviser's: asked only by its button, then shown on top.
 local before = #sentInsights(wow)
+button("Explain briefly"):Fire("OnClick")
+local explained = sentInsights(wow)
+assert(#explained == before + 1 and explained[#explained].kind == "digest" and not explained[#explained].force and explained[#explained].facts.gear == "15275")
+local told = CopyTable(done)
+told.rev = done.rev + 1
+told.insights[2] = { kind = "digest", key = "me", state = "ready", at = time(), data = { headline = "Two changes for your mage", newest = "2026-11-11",
+    items = { { date = "2026-11-06", category = "Classes", text = "Arcane Blast lasts 18 seconds.", why = "You are a mage.", relevance = "direct" } } } }
+wow.payload = told
+T.Sync.Check()
+card = hub.Cards(hub.Model({})).news
+assert(card.title == "Two changes for your mage" and card.rows[1].text == "In short" and card.rows[2].text == "You are a mage.")
+
+-- "Check now" asks again past the cache and is watched on screen.
+before = #sentInsights(wow)
 button("Check now"):Fire("OnClick")
 local again = sentInsights(wow)
-assert(#again == before + 1 and again[#again].force == true and T.Store.Tracked(again[#again].seq))
+assert(#again == before + 1 and again[#again].kind == "changes" and again[#again].force == true and T.Store.Tracked(again[#again].seq))
 assert(T.Insights.Watching(), "a request the player is looking at keeps the page polling")
 assert(hub.Cards(hub.Model({})).news.rows[1].kind == "pending", "the old answer is not shown as the new one")
 
@@ -108,18 +133,19 @@ T2.HubOverview.Observe(T2.HubOverview.Cards(T2.HubOverview.Model({})))
 assert(T2.HubOverview.UnreadCount() == 0 and #wow2.chat == 0, "read news does not come back after a reload")
 local newer = CopyTable(done)
 newer.rev = done.rev + 5
-newer.insights[1].data.newest = "2026-11-12"
+newer.insights[1].data.key = "k2"
 wow2.payload = newer
 T2.Sync.Check()
 T2.HubOverview.Observe(T2.HubOverview.Cards(T2.HubOverview.Model({})))
-assert(T2.HubOverview.UnreadCount() == 1, "a newer hotfix list is unread again")
+assert(T2.HubOverview.UnreadCount() == 1, "a new list of changes is unread again")
 
--- A fresh install researches only on click: nothing after login, nothing on opening a section, one request per button.
+-- A fresh install researches only on click: after login only the free changes check, nothing on opening a section,
+-- one request per button.
 local wow4, T4 = start({})
 assert(T4.settings.research == "click" and T4.settings.researchCap == 60, "research on click and 60 jobs a day are the defaults")
 wow4.Event("PLAYER_ENTERING_WORLD", true)
 wow4.Run(30)
-assert(#sentInsights(wow4) == 0, "with research on click the login asks nothing")
+assert(#sentInsights(wow4) == 1 and sentInsights(wow4)[1].kind == "changes", "with research on click the login asks only the free check")
 T4.Window.Show()
 local function press(w, text)
     for _, f in ipairs(w.frames) do
@@ -133,16 +159,22 @@ local function tile(w, text)
 end
 for _, label in ipairs({ "Where to level", "Bags", "Character check-up", "Gold and training", "What’s new" }) do
     assert(tile(wow4, label), "the overview has the tile " .. label)
-    assert(#sentInsights(wow4) == 0, "opening " .. label .. " asks nothing")
+    assert(#sentInsights(wow4) == 1, "opening " .. label .. " asks nothing")
     if label ~= "What’s new" then assert(press(wow4, "Back to overview"), "the section leads back to the overview") end
 end
-assert(not T4.Insights.Request("dungeon", "Ragefire Chasm:Horde", { name = "Ragefire Chasm" }, { auto = true }) and #sentInsights(wow4) == 0,
+assert(not T4.Insights.Request("dungeon", "Ragefire Chasm:Horde", { name = "Ragefire Chasm" }, { auto = true }) and #sentInsights(wow4) == 1,
     "any request marked as unasked is refused")
-assert(press(wow4, "Check now"), "the news card offers its button")
+local answered = CopyTable(done)
+answered.rev = done.rev + 10
+answered.acks = { [T4.Transport.session] = { sentInsights(wow4)[1].seq } }
+wow4.payload = answered
+T4.Sync.Check()
+T4.Window.Show()
+assert(press(wow4, "Explain briefly"), "the news card offers its explanation")
 local clicked = sentInsights(wow4)
-assert(#clicked == 1 and clicked[1].kind == "digest" and not clicked[1].force, "a press asks once, and the first press may be answered from the cache")
+assert(#clicked == 2 and clicked[2].kind == "digest" and not clicked[2].force, "a press asks once, and the first press may be answered from the cache")
 T4.settings.researchCap = 20
-assert(T4.Insights.Request("digest", "y", { level = 1 }) and sentInsights(wow4)[2].cap == 20, "a changed cap goes out with the next request")
+assert(T4.Insights.Request("digest", "y", { level = 1 }) and sentInsights(wow4)[3].cap == 20, "a changed cap goes out with the next request")
 
 -- Turning the overview's marks off does not stop automatic research, and a failure offers a retry.
 saved = CopyTable(T2.settings)
@@ -155,10 +187,10 @@ saved.research = "click"
 local wow3, T3, ready3 = start(saved)
 wow3.Event("PLAYER_ENTERING_WORLD", true)
 wow3.Run(30)
-assert(#sentInsights(wow3) == 0, "with research on click the login asks nothing")
+assert(#sentInsights(wow3) == 1 and sentInsights(wow3)[1].kind == "changes", "with research on click the login asks only the free check")
 local failed = CopyTable(ready3)
 failed.rev = ready3.rev + 1
-failed.insights = { { kind = "digest", key = "me", state = "failed", note = "hotfix list unavailable" } }
+failed.insights = { { kind = "changes", key = "me", state = "failed", note = "hotfix list unavailable" } }
 wow3.payload = failed
 T3.Sync.Check()
 local broken = T3.HubOverview.Cards(T3.HubOverview.Model({})).news
@@ -169,13 +201,13 @@ failed.rev, failed.character = failed.rev + 1, "Player-1-OTHER"
 T3.Sync.Check()
 assert(#T3.Store.insights == 0)
 function InCombatLockdown() return true end
-assert(T3.Insights.Request("digest", "x", { level = 1 }) == true and #sentInsights(wow3) == 0, "requests wait for the end of combat")
+assert(T3.Insights.Request("digest", "x", { level = 1 }) == true and #sentInsights(wow3) == 1, "requests wait for the end of combat")
 function InCombatLockdown() return false end
 wow3.Event("PLAYER_REGEN_ENABLED")
-assert(#sentInsights(wow3) == 1)
+assert(#sentInsights(wow3) == 2)
 
 -- Frames lost on the way: the helper's next payload does not confirm the request, so it goes out once more.
-local lostSeq = sentInsights(wow3)[1].seq
+local lostSeq = sentInsights(wow3)[2].seq
 local frames = #wow3.bits
 while T3.Transport.Sending(lostSeq) do wow3.Run(0.04) end
 local once = #wow3.bits - frames
@@ -189,5 +221,5 @@ wow3.payload = heard
 wow3.Run(4)
 assert(#wow3.bits - frames == 2 * once, "the same frames went out exactly twice")
 assert(T3.Store.Delivery(lostSeq) == "delivered" and T3.Insights.State("digest", "x") == "ready", "the repeated request is confirmed and answered")
-assert(#sentInsights(wow3) == 1, "the repeat reuses the same envelope: the helper sees one sequence number")
-print("Insights: research on click by default, login digest, three-load budget, news card, copyable source, forced recheck, persisted unread, failure, combat deferral and automatic repeat of a lost request OK")
+assert(#sentInsights(wow3) == 2, "the repeat reuses the same envelope: the helper sees one sequence number")
+print("Insights: research on click by default, free changes check at login, three-load budget, news card with ID matches, toast and chat notice, explanation on request, copyable source, forced recheck, persisted unread, failure, combat deferral and automatic repeat of a lost request OK")

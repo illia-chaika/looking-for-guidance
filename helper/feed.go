@@ -172,7 +172,7 @@ func loadIssues(ctx context.Context, dir, url string, now time.Time, fetch func(
 	if data, err := os.ReadFile(path); err != nil || json.Unmarshal(data, &cached) != nil || cached.URL != url {
 		cached = cachedPage{}
 	}
-	if cached.Text != "" && now.Sub(time.Unix(cached.Fetched, 0)) < feedMaxAge {
+	if cached.Text != "" && !feedStale(cached.Fetched, now, filepath.Join(filepath.Dir(dir), "world"), func(f *changesFile) string { return f.Issues.ChangedAt }) {
 		return cached.Text
 	}
 	text, err := fetch(ctx, url)
@@ -193,13 +193,14 @@ func loadIssues(ctx context.Context, dir, url string, now time.Time, fetch func(
 	return text
 }
 
-// loadFeed returns the cached hotfix list, refreshing it when it is older than feedMaxAge.
+// loadFeed returns the cached hotfix list, refreshing it when the backend's changes feed says the page changed
+// (without that feed: when it is older than feedMaxAge).
 // A failed refresh keeps the previous copy: stale notes with a date are better than none.
 func loadFeed(ctx context.Context, dir, url string, now time.Time, fetch func(context.Context, string) (string, error)) (*gameFeed, error) {
 	path := filepath.Join(dir, "feed.json")
 	var cached gameFeed
 	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &cached) == nil && cached.URL == url && len(cached.Days) > 0 {
-		if now.Sub(time.Unix(cached.Fetched, 0)) < feedMaxAge {
+		if !feedStale(cached.Fetched, now, filepath.Join(filepath.Dir(dir), "world"), func(f *changesFile) string { return f.Hotfixes.ChangedAt }) {
 			return &cached, nil
 		}
 	} else {

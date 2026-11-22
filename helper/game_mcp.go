@@ -48,6 +48,18 @@ func gameTools(dir string) []mcpObject {
 		auctionToolSchema(), []string{"snapshot_id", "items"}))
 	tools = append(tools, tool("find_auction_upgrades", "Search this character's own auction house for one equipment slot within a budget. The running game drops what the character cannot wear and returns the strongest candidates with their exact stats and asking prices, and the stats of what is worn there now; weigh them for the class. Takes up to a minute."+unavailable,
 		upgradeToolSchema(), []string{"snapshot_id", "slot", "budget"}))
+	// The world tools read no snapshot, so they do not offer snapshot_id (and ignore one passed out of habit).
+	world := func(name, description string, properties mcpObject, required []string) mcpObject {
+		t := tool(name, description, properties, required)
+		delete(t["inputSchema"].(mcpObject)["properties"].(mcpObject), "snapshot_id")
+		return t
+	}
+	tools = append(tools, world("search_game_data", "Search WoW Forever's world dataset of quests, NPCs, items, spells and places: by name in any game language or by ID, or by filters alone (kind plus zone, level range, side or role), e.g. quests in Westfall for levels 10-14, or trainers in Orgrimmar. Zones, cities, flight masters and dungeons are kind places (role zone, flight or dungeon). Each result gives kind, id, English name and a few facts that tell same-named records apart (level, side, zone, giver, rank, quality, slot). The dataset merges Blizzard's Game Data API, the game client's numbers and ForeverDB's crowd data and is refreshed daily: look here before searching the web, then read records with get_game_data.",
+		worldSearchSchema(), []string{}))
+	tools = append(tools, tool("get_changes", "Read what changed in WoW: Forever lately for this character, matched on this computer by game IDs: Blizzard's hotfix notes that name its quests, zone, worn or carried items, known spells, professions (tier mine), its class or race (tier class), and changes to its items and spells found in the game client's data, with exact numbers (was, now). Pass about with records from search_game_data to ask about those instead, for any character. General notes (no class, race, quest or place) are only counted. Use before answering what changed, whether something was fixed or nerfed, or why a quest or item behaves differently.",
+		changesToolSchema(), []string{"snapshot_id"}))
+	tools = append(tools, world("get_game_data", "Read up to 10 records of the world dataset at once by the kind and id search_game_data returned. A record has name (by locale) and one section per source: battlenet (Blizzard's Game Data API: item stats and spells, quest description with {name} for the player, rewards), client (numbers from the game client: item level, prices, slot; spell effects with base points and coefficients, coef for spell power and ap_coef for attack power, times in ms, ranges in yards), foreverdb (ForeverDB.net players' data seen in Forever: NPC places as map, x, y in percent, vendors and prices in copper, drop chances in percent, quest givers and chains, recipes, flight links with yards, copper and measured seconds; its classic parts are Classic data and may differ in Forever). Referenced items, NPCs, spells and quests come with their names, and referenced NPCs with where they stand. When the answer rests on foreverdb, name ForeverDB.net as the source.",
+		worldGetSchema(), []string{"refs"}))
 	noteID := mcpObject{"type": "string", "pattern": memoryKey.String(), "description": "Stable semantic key for one agreement, e.g. leveling-plan"}
 	revision := mcpObject{"type": "integer", "minimum": 0, "description": "Current revision returned by get_memory; zero only for a new note"}
 	quote := mcpObject{"type": "string", "minLength": 1, "maxLength": 400, "description": "Exact supporting words from the current player message"}
@@ -84,6 +96,15 @@ func queryGameSnapshot(dir, tool string, raw json.RawMessage) (mcpObject, error)
 	}
 	if tool == "find_auction_upgrades" {
 		return queryAuctionUpgrades(dir, raw)
+	}
+	if tool == "search_game_data" {
+		return queryWorldSearch(dir, raw)
+	}
+	if tool == "get_game_data" {
+		return queryWorldGet(dir, raw)
+	}
+	if tool == "get_changes" {
+		return queryChanges(dir, raw)
 	}
 	var args gameToolArgs
 	if err := readToolArgs(raw, &args); err != nil {
@@ -192,7 +213,7 @@ func runGameMCP(in io.Reader, out io.Writer, dir string) error {
 				}
 				reply["result"] = mcpObject{"protocolVersion": protocol, "capabilities": mcpObject{"tools": mcpObject{}},
 					"serverInfo":   mcpObject{"name": "wow_game", "title": "WoW Forever", "version": "1.4.0"},
-					"instructions": "Use the current question's wow_snapshot ID. Read summaries with get_context, the journal with get_quests, and other captured records with the named game tools. get_details enriches exact item and spell references through the running game. For personal recommendations consult get_memory for this character; manage player agreements using current quotes. Consult chat history for follow-ups. Use [exact quest title](quest:ID) for in-game quest links."}
+					"instructions": "Use the current question's wow_snapshot ID. Read summaries with get_context, the journal with get_quests, and other captured records with the named game tools. get_details enriches exact item and spell references through the running game. search_game_data and get_game_data read the world dataset of quests, NPCs, items, spells and places; get_changes reads recent hotfix notes and data changes matched to this character. For personal recommendations consult get_memory for this character; manage player agreements using current quotes. Consult chat history for follow-ups. Use [exact quest title](quest:ID) for in-game quest links."}
 				initialized = true
 			case !initialized:
 				fail(-32002, "Server not initialized")
@@ -203,7 +224,7 @@ func runGameMCP(in io.Reader, out io.Writer, dir string) error {
 					Name      string          `json:"name"`
 					Arguments json.RawMessage `json:"arguments"`
 				}
-				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices", "find_auction_upgrades"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
+				if json.Unmarshal(req.Params, &p) != nil || (!slices.Contains([]string{"get_context", "get_quests", "get_entries", "get_details", "get_recipes", "get_auction_prices", "find_auction_upgrades", "search_game_data", "get_game_data", "get_changes"}, p.Name) && gameEntryTool(p.Name) == nil && !memoryTool(p.Name)) {
 					fail(-32602, "Unknown tool or invalid parameters")
 					break
 				}
