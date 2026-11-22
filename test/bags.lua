@@ -150,6 +150,8 @@ local function hint(off)
 end
 assert(hint("setup") == "Auction prices are off: the project’s mirror is turned off in settings.json and there is no Battle.net API client of your own.", hint("setup"))
 assert(hint("failing") == "Auction prices are still downloading.", "a failing download reads as still downloading")
+assert(hint("sign-in") == "Auction prices appear after a one-time Battle.net sign-in in the Looking for Guidance menu: Blizzard’s terms require it, and nothing about the account is kept.",
+    "without the Battle.net sign-in the card says where to sign in and why")
 assert(hint("unknown") == nil and hint(nil) == nil, "an unknown code or none shows nothing")
 
 -- A remembered wish wins over the advice to sell.

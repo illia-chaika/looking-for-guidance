@@ -32,7 +32,9 @@ under the GNU General Public License, version 3. The modifications are distribut
   equipment slot that takes slots from the world dataset and lets the game judge the candidates.
 - Auction snapshots from the project's mirror at `api.lfguidance.com`, so that prices need no Battle.net client of
   the player's own; the companion uses it unless one is stored or the mirror is turned off.
-- A world dataset at `data.lfguidance.com`: quests, NPCs, items, spells and places merged by the project's backend
+- A one-time Battle.net sign-in from the companion's menu for the project's server, which shares Blizzard's data only
+  with signed-in players: no scopes, nothing about the account kept, a random key in the credential store.
+- A world dataset from the project's server at `api.lfguidance.com`: quests, NPCs, items, spells and places merged by the project's backend
   from ForeverDB's add-on data, Blizzard's Game Data API and the numbers in the game client's tables, downloaded once
   a day and searched by two adviser tools.
 - What changed is matched on the player's computer: Blizzard's hotfix notes resolved to game IDs through the world
@@ -55,11 +57,12 @@ write into the macOS app bundle and the Windows ZIP (`tools/copy-notices.sh`).
 
 ## Data the companion downloads
 
-The world dataset is not part of the downloads; the companion fetches it from `data.lfguidance.com`.
+The world dataset is not part of the downloads. The companion fetches it from `api.lfguidance.com` after the
+Battle.net sign-in.
 
 | Data | Terms | Notices |
 | --- | --- | --- |
-| Data from ForeverDB.net (https://foreverdb.net): what ForeverDB players recorded in WoW Forever and ForeverDB's own work; its Classic parts derive from CMaNGOS classic-db | GPL-3.0 with ForeverDB's attribution term | Each file's `notices`; ForeverDB's `LICENSE.txt`, `NOTICE.txt` and `COPYING.txt` at `https://data.lfguidance.com/world/legal/foreverdb/` |
+| Data from ForeverDB.net (https://foreverdb.net): what ForeverDB players recorded in WoW Forever and ForeverDB's own work. Its Classic parts derive from CMaNGOS classic-db | GPL-3.0 with ForeverDB's attribution term | Each file's `notices`, and ForeverDB's `LICENSE.txt`, `NOTICE.txt` and `COPYING.txt` at `https://api.lfguidance.com/v1/world/legal/foreverdb/`, open to everyone |
 | Blizzard Entertainment's Game Data API: item and quest data | Blizzard's API terms; kept at most 30 days | Credited in the dataset's manifest |
 | Numbers from the World of Warcraft: Forever client's tables, as wago.tools publishes them; no text | Blizzard Entertainment's | Credited in the dataset's manifest |
 | Changes to those numbers between days, with Blizzard's Game Data API values of changed items, and when Blizzard's hotfix and known-issues pages last changed (`world/changes.json`); no Blizzard text | As the rows above | — |

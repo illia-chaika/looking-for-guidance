@@ -233,15 +233,128 @@ var menuTexts = map[string][10]string{
 		"停止使用你自己的 Battle.net API 用戶端？助手會從這台電腦上移除它，並重新從專案的鏡像讀取拍賣場價格。",
 		"Smettere di usare il tuo client API di Battle.net? L’app compagna lo rimuove da questo computer e torna a leggere i prezzi d’asta dal mirror del progetto.",
 		"Перестати використовувати власний API-клієнт Battle.net? Помічник видалить його з цього комп’ютера й знову братиме ціни аукціону з дзеркала проєкту."},
+	"Sign in with Battle.net…": {
+		"Войти через Battle.net…",
+		"Mit Battle.net anmelden…",
+		"Se connecter avec Battle.net…",
+		"Iniciar sesión con Battle.net…",
+		"Entrar com a Battle.net…",
+		"Battle.net으로 로그인…",
+		"使用 Battle.net 登录…",
+		"使用 Battle.net 登入…",
+		"Accedi con Battle.net…",
+		"Увійти через Battle.net…"},
+	"Signed in with Battle.net": {
+		"Вход через Battle.net выполнен",
+		"Mit Battle.net angemeldet",
+		"Connecté avec Battle.net",
+		"Sesión iniciada con Battle.net",
+		"Conectado com a Battle.net",
+		"Battle.net으로 로그인됨",
+		"已使用 Battle.net 登录",
+		"已使用 Battle.net 登入",
+		"Accesso con Battle.net effettuato",
+		"Вхід через Battle.net виконано"},
+	"Auction prices and the world database come from the project's server, which Blizzard's terms let it share only with the app's players. The sign-in only shows that you have a Battle.net account. Nothing about it is kept.": {
+		"Цены аукциона и база мира приходят с сервера проекта, а условия Blizzard разрешают делиться ими только с игроками приложения. Вход лишь показывает, что у тебя есть аккаунт Battle.net. Ничего о нём не сохраняется.",
+		"Auktionspreise und die Weltdatenbank kommen vom Server des Projekts, und Blizzards Bedingungen erlauben, sie nur mit den Spielern der App zu teilen. Die Anmeldung zeigt nur, dass du ein Battle.net-Konto hast. Nichts darüber wird gespeichert.",
+		"Les prix de l’hôtel des ventes et la base du monde viennent du serveur du projet, que les conditions de Blizzard autorisent à les partager seulement avec les joueurs de l’app. La connexion montre seulement que tu as un compte Battle.net. Rien n’en est conservé.",
+		"Los precios de subasta y la base de datos del mundo vienen del servidor del proyecto, y las condiciones de Blizzard solo le permiten compartirlos con los jugadores de la app. El inicio de sesión solo muestra que tienes una cuenta de Battle.net. No se guarda nada de ella.",
+		"Os preços do leilão e o banco de dados do mundo vêm do servidor do projeto, e os termos da Blizzard só permitem compartilhá-los com os jogadores do app. A entrada só mostra que você tem uma conta Battle.net. Nada sobre ela é guardado.",
+		"경매장 시세와 월드 데이터베이스는 프로젝트 서버에서 받아 오며, Blizzard 약관상 앱 사용자에게만 제공할 수 있습니다. 로그인은 Battle.net 계정이 있다는 사실만 확인하며, 계정 정보는 저장하지 않습니다.",
+		"拍卖行价格和世界数据库来自项目的服务器，而 Blizzard 的条款只允许与本应用的玩家共享这些数据。登录只证明你有 Battle.net 账号，不会保存任何账号信息。",
+		"拍賣場價格和世界資料庫來自專案的伺服器，而 Blizzard 的條款只允許與本應用程式的玩家共享這些資料。登入只證明你有 Battle.net 帳號，不會保存任何帳號資訊。",
+		"I prezzi d’asta e il database del mondo arrivano dal server del progetto, e i termini di Blizzard permettono di condividerli solo con i giocatori dell’app. L’accesso mostra soltanto che hai un account Battle.net. Non ne viene conservato nulla.",
+		"Ціни аукціону й база світу надходять із сервера проєкту, а умови Blizzard дозволяють ділитися ними лише з гравцями застосунку. Вхід лише показує, що в тебе є акаунт Battle.net. Нічого про нього не зберігається."},
+	"Auction prices and the world database come from the project's server. Blizzard's terms let the project share this data only with its own players, so the server asks for a one-time sign-in with Battle.net.\n\nBlizzard's sign-in page opens in your browser. It will say the app may see your Account ID and BattleTag: Blizzard shows that for every app that uses its sign-in. The server never reads them, does not ask for your e-mail or characters, and keeps nothing about your account. It only learns that the sign-in worked. Continue?": {
+		"Цены аукциона и база мира приходят с сервера проекта. Условия Blizzard разрешают проекту делиться этими данными только со своими игроками, поэтому сервер просит один раз войти через Battle.net.\n\nСтраница входа Blizzard откроется в браузере. На ней будет сказано, что приложение может увидеть ID аккаунта и BattleTag: Blizzard пишет так для любого приложения со входом через Battle.net. Сервер их не читает, не запрашивает почту и персонажей и ничего о твоём аккаунте не хранит — он узнаёт только, что вход удался. Продолжить?",
+		"Auktionspreise und die Weltdatenbank kommen vom Server des Projekts. Blizzards Bedingungen erlauben dem Projekt, diese Daten nur mit seinen eigenen Spielern zu teilen, deshalb bittet der Server um eine einmalige Anmeldung mit Battle.net.\n\nBlizzards Anmeldeseite öffnet sich im Browser. Dort steht, dass die App deine Konto-ID und deinen BattleTag sehen darf: Das zeigt Blizzard bei jeder App mit Battle.net-Anmeldung. Der Server liest sie nicht, fragt weder E-Mail noch Charaktere ab und speichert nichts über dein Konto. Er erfährt nur, dass die Anmeldung geklappt hat. Fortfahren?",
+		"Les prix de l’hôtel des ventes et la base du monde viennent du serveur du projet. Les conditions de Blizzard ne permettent au projet de partager ces données qu’avec ses propres joueurs : le serveur demande donc une connexion unique avec Battle.net.\n\nLa page de connexion de Blizzard s’ouvre dans ton navigateur. Elle indiquera que l’app peut voir l’ID de ton compte et ton BattleTag : Blizzard l’affiche pour toute app qui utilise sa connexion. Le serveur ne les lit pas, ne demande ni ton e-mail ni tes personnages et ne conserve rien sur ton compte. Il apprend seulement que la connexion a réussi. Continuer ?",
+		"Los precios de subasta y la base de datos del mundo vienen del servidor del proyecto. Las condiciones de Blizzard solo permiten al proyecto compartir estos datos con sus propios jugadores, así que el servidor pide iniciar sesión una sola vez con Battle.net.\n\nLa página de inicio de sesión de Blizzard se abre en tu navegador. Dirá que la app puede ver el ID de tu cuenta y tu BattleTag: Blizzard lo muestra para cualquier app que use su inicio de sesión. El servidor no los lee, no pide tu correo ni tus personajes y no guarda nada de tu cuenta. Solo sabe que el inicio de sesión funcionó. ¿Continuar?",
+		"Os preços do leilão e o banco de dados do mundo vêm do servidor do projeto. Os termos da Blizzard só permitem ao projeto compartilhar esses dados com os próprios jogadores, então o servidor pede uma única entrada com a Battle.net.\n\nA página de entrada da Blizzard abre no seu navegador. Ela vai dizer que o app pode ver o ID da sua conta e o seu BattleTag: a Blizzard mostra isso para qualquer app que use a entrada dela. O servidor não os lê, não pede seu e-mail nem seus personagens e não guarda nada sobre a sua conta. Ele só fica sabendo que a entrada deu certo. Continuar?",
+		"경매장 시세와 월드 데이터베이스는 프로젝트 서버에서 받아 옵니다. Blizzard 약관상 프로젝트는 이 데이터를 자체 사용자에게만 제공할 수 있으므로, 서버는 Battle.net 로그인을 한 번 요청합니다.\n\n브라우저에서 Blizzard 로그인 페이지가 열립니다. 페이지에는 앱이 계정 ID와 BattleTag를 볼 수 있다고 표시되는데, Battle.net 로그인을 쓰는 모든 앱에 똑같이 표시되는 문구입니다. 서버는 이 정보를 읽지 않고, 이메일이나 캐릭터도 요청하지 않으며, 계정에 관한 어떤 정보도 저장하지 않습니다. 로그인에 성공했다는 사실만 알게 됩니다. 계속할까요?",
+		"拍卖行价格和世界数据库来自项目的服务器。Blizzard 的条款只允许项目与自己的玩家共享这些数据，因此服务器需要你用 Battle.net 登录一次。\n\n浏览器中会打开 Blizzard 的登录页面。页面上会写着应用可以查看你的账号 ID 和 BattleTag：凡是使用 Battle.net 登录的应用，Blizzard 都会这样显示。服务器不会读取这些信息，不会请求你的电子邮件或角色，也不会保存任何账号信息。它只知道登录成功了。继续吗？",
+		"拍賣場價格和世界資料庫來自專案的伺服器。Blizzard 的條款只允許專案與自己的玩家共享這些資料，因此伺服器需要你用 Battle.net 登入一次。\n\n瀏覽器中會開啟 Blizzard 的登入頁面。頁面上會寫著應用程式可以查看你的帳號 ID 和 BattleTag：凡是使用 Battle.net 登入的應用程式，Blizzard 都會這樣顯示。伺服器不會讀取這些資訊，不會請求你的電子郵件或角色，也不會保存任何帳號資訊。它只知道登入成功了。要繼續嗎？",
+		"I prezzi d’asta e il database del mondo arrivano dal server del progetto. I termini di Blizzard permettono al progetto di condividere questi dati solo con i propri giocatori, quindi il server chiede un accesso una tantum con Battle.net.\n\nLa pagina di accesso di Blizzard si apre nel browser. Dirà che l’app può vedere l’ID del tuo account e il tuo BattleTag: Blizzard lo mostra per ogni app che usa il suo accesso. Il server non li legge, non chiede e-mail né personaggi e del tuo account non conserva nulla. Sa soltanto che l’accesso è riuscito. Continuare?",
+		"Ціни аукціону й база світу надходять із сервера проєкту. Умови Blizzard дозволяють проєкту ділитися цими даними лише зі своїми гравцями, тож сервер просить один раз увійти через Battle.net.\n\nСторінка входу Blizzard відкриється в браузері. На ній буде сказано, що застосунок може бачити ID акаунта й BattleTag: Blizzard пише так для будь-якого застосунку зі входом через Battle.net. Сервер їх не читає, не запитує пошту й персонажів і нічого про твій акаунт не зберігає — він дізнається лише, що вхід вдався. Продовжити?"},
+	"Sign out of Battle.net? The companion forgets its key, and auction prices and world data stop coming from the project's server until you sign in again.": {
+		"Выйти из Battle.net? Помощник забудет свой ключ, и цены аукциона и база мира перестанут приходить с сервера проекта, пока ты снова не войдёшь.",
+		"Von Battle.net abmelden? Der Companion vergisst seinen Schlüssel, und Auktionspreise und Weltdaten kommen nicht mehr vom Server des Projekts, bis du dich wieder anmeldest.",
+		"Se déconnecter de Battle.net ? Le compagnon oublie sa clé, et les prix de l’hôtel des ventes et les données du monde ne viennent plus du serveur du projet jusqu’à ta prochaine connexion.",
+		"¿Cerrar sesión de Battle.net? El compañero olvida su clave, y los precios de subasta y los datos del mundo dejan de llegar del servidor del proyecto hasta que vuelvas a iniciar sesión.",
+		"Sair da Battle.net? O companheiro esquece a chave dele, e os preços do leilão e os dados do mundo deixam de vir do servidor do projeto até você entrar de novo.",
+		"Battle.net에서 로그아웃할까요? 도우미가 키를 지우며, 다시 로그인할 때까지 경매장 시세와 월드 데이터를 프로젝트 서버에서 받아 오지 않습니다.",
+		"要退出 Battle.net 吗？助手会删除它的密钥，在你再次登录之前，拍卖行价格和世界数据将不再从项目的服务器获取。",
+		"要登出 Battle.net 嗎？助手會刪除它的金鑰，在你再次登入之前，拍賣場價格和世界資料將不再從專案的伺服器取得。",
+		"Uscire da Battle.net? L’app compagna dimentica la sua chiave, e prezzi d’asta e dati del mondo non arrivano più dal server del progetto finché non accedi di nuovo.",
+		"Вийти з Battle.net? Помічник забуде свій ключ, і ціни аукціону та база світу перестануть надходити із сервера проєкту, доки ти знову не ввійдеш."},
+	"Couldn't remove the Battle.net sign-in: %s": {
+		"Не удалось убрать вход через Battle.net: %s",
+		"Die Battle.net-Anmeldung konnte nicht entfernt werden: %s",
+		"Impossible de retirer la connexion Battle.net : %s",
+		"No se pudo quitar el inicio de sesión de Battle.net: %s",
+		"Não foi possível remover a entrada da Battle.net: %s",
+		"Battle.net 로그인을 지우지 못했습니다: %s",
+		"无法移除 Battle.net 登录：%s",
+		"無法移除 Battle.net 登入：%s",
+		"Impossibile rimuovere l’accesso con Battle.net: %s",
+		"Не вдалося прибрати вхід через Battle.net: %s"},
+	"Couldn't finish the Battle.net sign-in: %s": {
+		"Не удалось завершить вход через Battle.net: %s",
+		"Die Anmeldung mit Battle.net konnte nicht abgeschlossen werden: %s",
+		"Impossible de terminer la connexion avec Battle.net : %s",
+		"No se pudo completar el inicio de sesión con Battle.net: %s",
+		"Não foi possível concluir a entrada com a Battle.net: %s",
+		"Battle.net 로그인을 완료하지 못했습니다: %s",
+		"无法完成 Battle.net 登录：%s",
+		"無法完成 Battle.net 登入：%s",
+		"Impossibile completare l’accesso con Battle.net: %s",
+		"Не вдалося завершити вхід через Battle.net: %s"},
+	"The Battle.net sign-in was cancelled. You can close this tab.": {
+		"Вход через Battle.net отменён. Эту вкладку можно закрыть.",
+		"Die Anmeldung mit Battle.net wurde abgebrochen. Du kannst diesen Tab schließen.",
+		"La connexion avec Battle.net a été annulée. Tu peux fermer cet onglet.",
+		"Se canceló el inicio de sesión con Battle.net. Puedes cerrar esta pestaña.",
+		"A entrada com a Battle.net foi cancelada. Você pode fechar esta aba.",
+		"Battle.net 로그인이 취소되었습니다. 이 탭을 닫아도 됩니다.",
+		"Battle.net 登录已取消。你可以关闭此标签页。",
+		"Battle.net 登入已取消。你可以關閉此分頁。",
+		"L’accesso con Battle.net è stato annullato. Puoi chiudere questa scheda.",
+		"Вхід через Battle.net скасовано. Цю вкладку можна закрити."},
+	"The Battle.net sign-in did not finish. Close this tab and try again from the Looking for Guidance menu.": {
+		"Вход через Battle.net не завершился. Закрой эту вкладку и попробуй ещё раз из меню Looking for Guidance.",
+		"Die Anmeldung mit Battle.net wurde nicht abgeschlossen. Schließe diesen Tab und versuche es erneut über das Menü von Looking for Guidance.",
+		"La connexion avec Battle.net n’a pas abouti. Ferme cet onglet et réessaie depuis le menu de Looking for Guidance.",
+		"El inicio de sesión con Battle.net no se completó. Cierra esta pestaña y vuelve a intentarlo desde el menú de Looking for Guidance.",
+		"A entrada com a Battle.net não foi concluída. Feche esta aba e tente de novo pelo menu do Looking for Guidance.",
+		"Battle.net 로그인이 완료되지 않았습니다. 이 탭을 닫고 Looking for Guidance 메뉴에서 다시 시도하세요.",
+		"Battle.net 登录未完成。请关闭此标签页，然后从 Looking for Guidance 菜单重试。",
+		"Battle.net 登入未完成。請關閉此分頁，然後從 Looking for Guidance 選單重試。",
+		"L’accesso con Battle.net non è stato completato. Chiudi questa scheda e riprova dal menu di Looking for Guidance.",
+		"Вхід через Battle.net не завершився. Закрий цю вкладку й спробуй ще раз із меню Looking for Guidance."},
+	"Signed in with Battle.net. You can close this tab and go back to the game.": {
+		"Вход через Battle.net выполнен. Эту вкладку можно закрыть и вернуться в игру.",
+		"Mit Battle.net angemeldet. Du kannst diesen Tab schließen und zum Spiel zurückkehren.",
+		"Connecté avec Battle.net. Tu peux fermer cet onglet et retourner au jeu.",
+		"Sesión iniciada con Battle.net. Puedes cerrar esta pestaña y volver al juego.",
+		"Conectado com a Battle.net. Você pode fechar esta aba e voltar ao jogo.",
+		"Battle.net으로 로그인했습니다. 이 탭을 닫고 게임으로 돌아가세요.",
+		"已使用 Battle.net 登录。你可以关闭此标签页并回到游戏。",
+		"已使用 Battle.net 登入。你可以關閉此分頁並回到遊戲。",
+		"Accesso con Battle.net effettuato. Puoi chiudere questa scheda e tornare al gioco.",
+		"Вхід через Battle.net виконано. Цю вкладку можна закрити й повернутися до гри."},
 	"Cancel": {"Отмена", "Abbrechen", "Annuler", "Cancelar", "Cancelar", "취소", "取消", "取消", "Annulla", "Скасувати"},
 }
 
-var menuLanguage = sync.OnceValue(func() string {
+var menuLanguage = sync.OnceValue(chosenMenuLanguage)
+
+// chosenMenuLanguage is language from settings.json, or else the system's.
+func chosenMenuLanguage() string {
 	if chosen := loadSettings().Language; chosen != "" {
 		return matchLanguage([]string{chosen})
 	}
 	return matchLanguage(systemLanguages())
-})
+}
 
 // matchLanguage picks the first preferred language the menu has, as the system does for an app's own texts.
 func matchLanguage(preferred []string) string {

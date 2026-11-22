@@ -73,6 +73,28 @@ assert(card.rows[3].title == "Staff of Jordan" and card.rows[3].text == "Your it
 assert(card.rows[4].text == "For your class" and card.rows[5].text == "Your class" and card.rows[6].kind == "sources")
 assert(card.rows[7].kind == "actions" and card.rows[7].actions[1].label == "Explain briefly" and card.rows[7].actions[2].label == "Check now")
 assert(card.persist and card.signal == "k1")
+
+-- Without the world dataset the card says so; when it waits for the Battle.net sign-in, it says where and why instead.
+local rev = done.rev
+local function newsWith(fields)
+    local p = CopyTable(done)
+    rev = rev + 1
+    p.rev = rev
+    for k, v in pairs(fields) do p.insights[1].data[k] = v end
+    wow.payload = p
+    T.Sync.Check()
+    return hub.Cards(hub.Model({})).news
+end
+local function says(c, start)
+    for _, r in ipairs(c.rows) do
+        if r.kind == "text" and type(r.text) == "string" and r.text:find(start, 1, true) == 1 then return true end
+    end
+end
+assert(says(newsWith({ no_world = true }), "The world data isn’t downloaded yet"), "a missing world dataset is named")
+local waiting = newsWith({ no_world = true, world_sign_in = true })
+assert(says(waiting, "The world data comes after a one-time Battle.net sign-in") and not says(waiting, "The world data isn’t downloaded yet"),
+    "a dataset that waits for the sign-in says where to sign in, once")
+card = newsWith({})
 local toasts = #wow.frames
 hub.Observe(hub.Cards(hub.Model({})))
 assert(hub.UnreadCount() == 1 and #wow.chat == 1 and wow.chat[1]:find("New hotfixes concern your character (2)", 1, true),

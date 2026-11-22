@@ -43,6 +43,7 @@ func (a *app) trayReady() {
 	useCodex := adviser.AddSubMenuItemCheckbox("Codex", "", a.view().provider != "claude")
 	useClaude := adviser.AddSubMenuItemCheckbox("Claude Code", "", a.view().provider == "claude")
 	runWith := systray.AddMenuItemCheckbox(tr("Start with WoW"), tr("Start the companion together with the game"), a.view().runWithWoW)
+	battleNet := systray.AddMenuItemCheckbox(tr("Sign in with Battle.net…"), tr("Auction prices and the world database come from the project's server, which Blizzard's terms let it share only with the app's players. The sign-in only shows that you have a Battle.net account. Nothing about it is kept."), false)
 	prices := systray.AddMenuItemCheckbox(tr("Own Battle.net API client"), tr("Auction prices come from the project's mirror; with this on, the companion asks Blizzard with your own API client instead"), false)
 	choose := systray.AddMenuItem(tr("Choose the WoW folder…"), "")
 	choose.Hide()
@@ -82,6 +83,12 @@ func (a *app) trayReady() {
 			runWith.Uncheck()
 		}
 		check(prices, v.auctions)
+		check(battleNet, v.battleNet)
+		if v.battleNet {
+			battleNet.SetTitle(tr("Signed in with Battle.net"))
+		} else {
+			battleNet.SetTitle(tr("Sign in with Battle.net…"))
+		}
 		update.SetTitle(updateTitle(v))
 		visible(update, v.update != "")
 		enabled(update, v.updating == updateReady || v.updating == updateFailed)
@@ -98,6 +105,7 @@ func (a *app) trayReady() {
 	go a.watchAuctions()
 	go a.watchWorld()
 	go a.noteAuctionClient()
+	go a.noteBackendToken()
 	go a.checkUpdates()
 
 	for {
@@ -108,6 +116,8 @@ func (a *app) trayReady() {
 			a.setRunWithWoW(!a.view().runWithWoW)
 		case <-prices.ClickedCh:
 			go a.toggleAuctions()
+		case <-battleNet.ClickedCh:
+			go a.toggleBattleNetSignIn()
 		case <-retryAccess.ClickedCh:
 			a.requestVolumeRetry()
 		case <-choose.ClickedCh:

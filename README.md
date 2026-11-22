@@ -22,9 +22,9 @@ searches current sources before answering. Shift-click items, spells and quests 
 its own conversations and its own memory of decisions ("I am saving for the mount", "keep the linen").
 
 **Auction prices.** The adviser can look up asking prices on your character's auction house before it tells you to
-buy or sell something there, and search your market for an upgrade for one equipment slot within a budget. Nothing
-to set up: the companion reads Blizzard's hourly snapshots from the project's mirror, or through your own Battle.net
-API client if you prefer (see [Auction prices](#auction-prices)).
+buy or sell something there, and search your market for an upgrade for one equipment slot within a budget. After a
+one-time *Sign in with Battle.net* in the companion's menu it reads Blizzard's hourly snapshots from the project's
+mirror, or it asks Blizzard through your own Battle.net API client if you prefer (see [Auction prices](#auction-prices)).
 
 **Journal.** Eight sections of advice for your character. What the game itself knows is shown at once; what needs
 research is prepared when you press the section's button — or by itself, if you switch research to automatic:
@@ -82,7 +82,8 @@ flowchart LR
   the question and the tool results it asks for leaves the computer — apart from the downloads below.
 - **World data.** The adviser looks up quests, NPCs, items, spells and places in a dataset on your disk before it
   searches the web: who gives and takes a quest, where an NPC stands and what it sells, where an item drops and how
-  often, a spell's coefficients. The project builds the dataset once for everybody and the companion downloads it.
+  often, a spell's coefficients. The project builds the dataset once for everybody and the companion downloads it
+  after the same one-time Battle.net sign-in.
 - **What changed** needs no adviser. The companion reads Blizzard's hotfix notes itself, resolves the quests, items,
   spells and places they name to game IDs through the world dataset, and compares them, together with the data
   changes the project's backend finds in the game client's tables, with your quest log, zone, gear, bags, spells and
@@ -97,8 +98,8 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 ## Cost and privacy
 
 - Advice uses **your own** subscription: a Claude plan through Claude Code, or a ChatGPT plan through the Codex CLI.
-  One of them is enough. There is no account to create; the project's only servers are the auction mirror and the
-  world dataset below.
+  One of them is enough. There is no account to create. The project's only server holds the auction mirror and the
+  world dataset below, and asks for a one-time Battle.net sign-in that keeps nothing about your account.
 - What is sent to the model: your question, and the sections of the character snapshot the agent requests. You
   choose the allowed sections in *Settings → Character data*.
 - Journal research spends the same allowance, so by default it runs **only when you press a button** in a section.
@@ -110,16 +111,26 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 - The chat footer's tooltip shows which adviser answers and how much of its allowance is left, when the provider
   reports that: Codex through its account limits, Claude Code after each turn.
 - Conversations, snapshots, memory and cached research stay on your disk.
+- **Battle.net sign-in.** Blizzard's API terms let the project share Blizzard's data only with its own app's players,
+  so the project's server asks you once to choose *Sign in with Battle.net…* in the companion's menu. You sign in on
+  Blizzard's own page. That page says the app may see your Battle.net Account ID and BattleTag: Blizzard shows this
+  for every app that uses its sign-in, even one that asks for nothing more, as this one does. The server never reads
+  them: it does not call Blizzard's `/userinfo`, drops Blizzard's access token unused and keeps nothing about your
+  account. That Blizzard gave a token at all is the only thing it learns. The server then gives the companion a
+  random key that is not linked to you. The companion keeps it in the system's credential store
+  (item `lfg-backend-token`, account `battlenet`) and sends it with each download. Choosing *Signed in with
+  Battle.net* in the same menu removes it. Without the sign-in everything else works, and the journal and the adviser say
+  once what the extra data needs.
 - Auction prices come from Blizzard's Game Data API. By default the companion downloads your market's snapshot from
   the project's mirror at `api.lfguidance.com`, which fetches every Forever auction house from Blizzard and serves
-  the snapshots unchanged. The mirror runs on Cloudflare, which sees your IP address and the auction house you ask
-  for; the mirror's own code stores nothing about requests. With your own Battle.net API client the companion asks
+  the snapshots unchanged to signed-in players. The mirror runs on Cloudflare, which sees your IP address and the
+  auction house you ask for. The mirror's own code stores nothing about requests. With your own Battle.net API client the companion asks
   Blizzard directly instead, and `"auctionMirror": "off"` in `settings.json` stops the mirror altogether. Either way
   the companion asks for nothing but your market's snapshot (region, ruleset and faction pick it); no character
   data is sent. Prices and their history stay on your disk.
-- Once a day the companion downloads the files of the world dataset that changed from `data.lfguidance.com`, files
-  that Cloudflare serves; Cloudflare sees your IP address and nothing else is sent. The dataset stays on your disk.
-- Every hour it downloads `world/changes.json` from the same address: the data changes of the last 30 days and when
+- Once a day the companion downloads the files of the world dataset that changed from the same server. Cloudflare
+  sees your IP address, the server sees the sign-in key, and nothing else is sent. The dataset stays on your disk.
+- Every hour it downloads `world/changes.json` from the same server: the data changes of the last 30 days and when
   Blizzard's hotfix article and known-issues post last changed. The companion fetches those two Blizzard pages
   itself, and only after they changed (every three hours when that file is not there). Your character's data is
   compared on your disk and goes nowhere.
@@ -132,7 +143,9 @@ Code with a Claude plan, or the Codex CLI with a ChatGPT plan.
 1. Download [looking-for-guidance-macOS.zip](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-macOS.zip)
    and open the app inside. It offers to move itself to the Applications folder.
 2. Pick the game folder from its menu bar icon and let it install the add-on.
-3. In the game, type `/ask`.
+3. Choose *Sign in with Battle.net…* in the same menu for auction prices and the world database (see
+   [Cost and privacy](#cost-and-privacy) for what it does and does not share). You can do it later, too.
+4. In the game, type `/ask`.
 
 The app looks for a new version once a day, or when you choose *Check for Updates…* in its menu, and installs it
 while the game is closed. Versions 0.10.0 and 0.10.1 never check: download the current one once by hand. To build it
@@ -178,14 +191,15 @@ The menu covers the everyday choices. The rest lives in `~/Library/Application S
 | `language` | Language of the companion's menu, such as `"ru"` or `"de"`; by default it follows the system |
 | `gameDir` | The agent's working folder; chats are tied to it, so it only matters when moving an existing setup |
 | `hotfixUrl` | Address of Blizzard's hotfix article, if it moves |
-| `auctionMirror` | Address of the auction mirror used without your own Battle.net client, or `"off"` |
+| `auctionMirror` | Address of the auction mirror used without your own Battle.net client (it gets the sign-in key), or `"off"` |
 
 ### Auction prices
 
 Blizzard serves WoW: Forever's auction houses through its Game Data API, about once an hour. Reading the API takes
 an API client, so the project runs a mirror on Cloudflare at `api.lfguidance.com` with a client of its own: every few
 minutes it asks Blizzard about every Forever auction house and keeps the newest snapshot of each, unchanged. Without
-a client of yours the companion reads from the mirror, and there is nothing to set up.
+a client of yours the companion reads from the mirror once you have chosen *Sign in with Battle.net…* in its menu
+(see [Cost and privacy](#cost-and-privacy)).
 
 To ask Blizzard yourself instead, use your own free API client; the companion then never contacts the mirror.
 Setting it up is the same on macOS and Windows (where, like the rest of the Windows build, it has not been tried
@@ -224,8 +238,10 @@ which the adviser passes on in your language; the Bags section says it in one li
 
 - No client is set up and the mirror is off (`"auctionMirror": "off"`): remove that setting, or choose *Own
   Battle.net API client*.
+- No client is set up and you have not signed in with Battle.net: choose *Sign in with Battle.net…*, or *Own
+  Battle.net API client*. A key the server no longer accepts is removed, and the menu offers the sign-in again.
 - Blizzard no longer accepts the stored client, as after deleting it or resetting its secret: choose *Own Battle.net
-  API client* to remove it and go back to the mirror, and again to store a working client.
+  API client* to remove it and go back to the mirror (after the sign-in), and again to store a working client.
 - The character's market has no data in the API. Normal and PvP markets are known; which auction house serves each
   Roleplay ruleset is not known yet, and hardcore characters trade on a market the API does not list.
 - The first download is still running, or failing, as when the mirror or Blizzard cannot be reached; the companion
@@ -251,10 +267,11 @@ the items, NPCs, spells and quests it refers to:
   what vendors sell and for how much, drop chances, who gives and takes quests, new Forever quests, flight times —
   together with Classic data from CMaNGOS where Forever's is missing, labelled as Classic.
 
-The project's backend fetches each source once for everybody, merges them by game ID, and publishes the result at
-`data.lfguidance.com` (about 7 MB compressed). The companion checks it once a day and downloads only the files
-that changed into the `world` folder beside `settings.json`. It needs nothing from you; until the first download
-the tools say so and the adviser uses other sources. Blizzard's terms allow its data to be kept for 30 days: a
+The project's backend fetches each source once for everybody, merges them by game ID, and serves the result to
+signed-in players from `api.lfguidance.com` (about 7 MB compressed). The companion checks it once a day and downloads
+only the files that changed into the `world` folder beside `settings.json`. It needs the one-time *Sign in with
+Battle.net…*. Until then, or until the first download, the tools say so and the adviser uses other sources. A copy
+already on your disk keeps working after you sign out. Blizzard's terms allow its data to be kept for 30 days: a
 stored copy whose Blizzard data has grown older than that is deleted.
 
 ### What changed
@@ -316,7 +333,7 @@ go test ./...
 python3 test/install_quiesce.py && python3 test/install_addon_payload.py
 ```
 
-Three checks talk to the real world and are off by default:
+Live checks talk to the real world and are off by default:
 
 - `FOREVER_LIVE=digest go test -run TestLiveInsight -v ./helper` runs one journal research job against the real
   agent and the real hotfix page (`quest`, `brief`, `dungeon`, `bags` and `leveling` work too; `digest` reads the
@@ -325,9 +342,13 @@ Three checks talk to the real world and are off by default:
   `bags` job a real auction house first (needs the Battle.net client stored through *Own Battle.net API client*).
 - `FOREVER_AUCTION="EU PvE Horde" go test -run TestLiveAuction -v ./helper` downloads that auction house with the
   Battle.net client stored through *Own Battle.net API client* and checks the summary and the item table taken from
-  the world dataset. The other tests keep their client in memory and never touch the credential store.
-- `FOREVER_WORLD=1 go test -run TestLiveWorld -v ./helper` downloads the world dataset from `data.lfguidance.com` and
-  looks up a quest, an NPC, an item, a spell and a dungeon through the adviser's tools.
+  the world dataset (which needs the key from *Sign in with Battle.net…*). The other tests keep their client and key
+  in memory and never touch the credential store.
+- `FOREVER_WORLD=1 go test -run TestLiveWorld -v ./helper` downloads the world dataset from the project's server with
+  the key stored by *Sign in with Battle.net…* and looks up a quest, an NPC, an item, a spell and a dungeon through
+  the adviser's tools.
+- `FOREVER_SIGNIN=1 go test -run TestLiveSignIn -v ./helper` signs in with Battle.net in the default browser, as
+  *Sign in with Battle.net…* does, stores the key and reads the world dataset's manifest with it.
 - `FOREVER_FRAMES=/Volumes/GameDisk go test -run TestFrameSoak -v ./helper` writes `AddOns.txt` to a temporary
   folder on that disk the way the game does and reads it with the companion's own watcher.
 

@@ -152,7 +152,9 @@ Hub.Extend("news", {
             if (data.more or 0) > 0 then
                 c.rows[#c.rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("И ещё {1}: спроси советника, что изменилось.", data.more) }
             end
-            if data.no_world then
+            if data.world_sign_in then
+                c.rows[#c.rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("База мира придёт после разового входа через Battle.net в меню Looking for Guidance, так требуют условия Blizzard. Пока совпадения только по классу, профессиям и заданиям.") }
+            elseif data.no_world then
                 c.rows[#c.rows + 1] = { kind = "text", style = "t-meta", ink = "detail", text = L("База мира ещё не скачана: совпадения только по классу, профессиям и заданиям.") }
             end
             local y, mo, d = tostring(data.newest or ""):match("^(%d+)-(%d+)-(%d+)$")

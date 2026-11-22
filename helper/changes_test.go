@@ -76,6 +76,7 @@ var changesWorld = map[string]map[string]any{
 // changesFixture sets up a world dataset, a cached hotfix list and a changes feed under one settings folder.
 func changesFixture(t *testing.T) (snapshots string, world *worldData) {
 	t.Helper()
+	useBackendToken(t)
 	f := newFakeWorld(t, changesWorld, "")
 	snapshots = filepath.Join(t.TempDir(), "snapshots")
 	w := &worldWatcher{dir: worldDir(snapshots), http: http.DefaultClient, base: func() string { return f.srv.URL }, now: time.Now}
@@ -345,10 +346,11 @@ func TestSummaryReadsTheShortlistOnly(t *testing.T) {
 }
 
 func TestChangesFeedDownloadAndPageRefetchRule(t *testing.T) {
+	useBackendToken(t)
 	var served, notModified atomic.Int32
 	body := `{"built":"` + time.Now().UTC().Format(time.RFC3339) + `","hotfixes":{"url":"u","newest":"2026-11-19","changed_at":"2026-11-20T10:00:00Z"},"issues":{"changed_at":"2026-11-20T09:00:00Z"},"changes":[]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/world/changes.json" {
+		if r.URL.Path != "/world/changes.json" || r.Header.Get("Authorization") != "Bearer "+testBackendToken {
 			http.NotFound(w, r)
 			return
 		}

@@ -23,7 +23,8 @@ import (
 // The auction house of the player's market, from Blizzard's Game Data API. The tray downloads the houses the game
 // reported recently and keeps a short summary per item; the game data server reads it for get_auction_prices.
 // Snapshots come through the player's own Battle.net API client when one is in the credential store
-// (battleNetClient), otherwise from the project's mirror, which serves Blizzard's snapshots unchanged.
+// (battleNetClient), otherwise from the project's mirror, which serves Blizzard's snapshots unchanged to players who
+// signed in with Battle.net (backend_login.go).
 
 const (
 	battleNetAccount       = "battlenet"
@@ -358,10 +359,11 @@ type auctionSource interface {
 }
 
 // auctionMirror is the project's mirror of every Forever auction house: the same JSON and Last-Modified as Blizzard,
-// without a token.
+// for the token the server gave at the Battle.net sign-in.
 type auctionMirror struct {
-	base string
-	http *http.Client
+	base  string
+	http  *http.Client
+	token string
 }
 
 func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*http.Response, error) {
@@ -374,6 +376,7 @@ func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*h
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "looking-for-guidance/"+version)
+	req.Header.Set("Authorization", "Bearer "+m.token)
 	if since != "" {
 		req.Header.Set("If-Modified-Since", since)
 	}
@@ -382,6 +385,9 @@ func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*h
 		return nil, err
 	}
 	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		resp.Body.Close()
+		return nil, errSignInNeeded
 	case resp.StatusCode == http.StatusOK && (since == "" || resp.Header.Get("Last-Modified") != since):
 		return resp, nil
 	case resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotModified:
@@ -397,6 +403,7 @@ type auctionWatcher struct {
 	bn     *battleNet
 	mirror func() string // the mirror's address, or "" when it is off
 	now    func() time.Time
+	lost   func() // after the server turned the sign-in token down
 }
 
 func newAuctionWatcher(dir string) *auctionWatcher {
@@ -631,13 +638,14 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 	}
 	status := auctionStatus{Failing: map[string]string{}}
 	var src auctionSource = w.bn
+	var token string
 	if !ok {
 		base := w.mirror()
-		if base == "" {
-			w.saveStatus(status)
+		if token = backendToken(); base == "" || token == "" {
+			w.saveStatus(status) // without the sign-in the tools and the journal say how to get it
 			return
 		}
-		src = &auctionMirror{base: base, http: w.bn.http}
+		src = &auctionMirror{base: base, http: w.bn.http, token: token}
 	}
 	markets := recentMarkets(w.dir, w.now())
 	for _, m := range markets {
@@ -649,6 +657,11 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 		case errors.Is(err, errBattleNetRefused):
 			logf("Auction prices: %v", err)
 			w.saveStatus(auctionStatus{Refused: err.Error()})
+			return
+		case errors.Is(err, errSignInNeeded):
+			logf("Auction prices: %v; the stored sign-in is removed", err)
+			dropBackendToken(token, w.lost)
+			w.saveStatus(auctionStatus{})
 			return
 		case err != nil:
 			logf("Auction house %s: %v", m.label(), err)
@@ -669,6 +682,7 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 // watchAuctions runs in the tray for its whole life, with or without the game.
 func (a *app) watchAuctions() {
 	w := newAuctionWatcher(auctionDir(snapshotDir()))
+	w.lost = a.noteBackendToken
 	wait := time.NewTimer(30 * time.Second)
 	defer wait.Stop()
 	for {

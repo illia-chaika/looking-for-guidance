@@ -35,7 +35,7 @@ func auctionToolSchema() mcpObject {
 // auctionUnavailable is why the auction tools have no prices to give and what the player can do about it. The tools
 // answer with it as JSON for the adviser to retell in the player's language; the journal shows its code.
 type auctionUnavailable struct {
-	Code     string // setup, refused, market, failing or pending
+	Code     string // setup, sign-in, refused, market, failing or pending
 	Reason   string
 	WhatToDo string
 }
@@ -45,7 +45,7 @@ func (u *auctionUnavailable) Error() string {
 	return string(data)
 }
 
-const auctionSetUp = "Remove \"auctionMirror\": \"off\" from the companion's settings.json to read prices from the project's mirror again. Or, in the Looking for Guidance menu (its icon in the menu bar on macOS, in the notification area on Windows), choose Own Battle.net API client: it opens develop.battle.net, where the player creates a free API client, and asks for that client's ID and secret. Prices follow a few minutes after the next question in the game."
+const auctionSetUp = "Remove \"auctionMirror\": \"off\" from the companion's settings.json to read prices from the project's mirror again, after the one-time Sign in with Battle.net from the same menu. Or, in the Looking for Guidance menu (its icon in the menu bar on macOS, in the notification area on Windows), choose Own Battle.net API client: it opens develop.battle.net, where the player creates a free API client, and asks for that client's ID and secret. Prices follow a few minutes after the next question in the game."
 
 // auctionProblem tells why the market has no prices to read, or nil when its summary is there. dir is any folder
 // beside the auctions one, such as the snapshots or the journal's.
@@ -57,10 +57,13 @@ func auctionProblem(dir string, m auctionMarket, marketErr error) *auctionUnavai
 		return &auctionUnavailable{"market", "There are no auction prices for this: " + marketErr.Error() + ".",
 			"Nothing to set up in the companion; advise without auction prices."}
 	}
+	if _, _, ok := battleNetClient(); !ok && backendToken() == "" {
+		return auctionSignIn()
+	}
 	status := loadAuctionStatus(auctionDir(dir))
 	if status.Refused != "" {
 		return &auctionUnavailable{"refused", status.Refused + ": the stored client ID or secret no longer works.",
-			"In the Looking for Guidance menu choose Own Battle.net API client to remove the stored client: prices then come from the project's mirror. To keep a client of one's own, choose it again and enter the ID and secret of a working client from develop.battle.net. A deleted client or a reset secret stops working."}
+			"In the Looking for Guidance menu choose Own Battle.net API client to remove the stored client: prices then come from the project's mirror, after the one-time Sign in with Battle.net in the same menu. To keep a client of one's own, choose it again and enter the ID and secret of a working client from develop.battle.net. A deleted client or a reset secret stops working."}
 	}
 	if _, err := os.Stat(filepath.Join(auctionDir(dir), m.key()+".json")); err == nil {
 		return nil
@@ -71,6 +74,12 @@ func auctionProblem(dir string, m auctionMarket, marketErr error) *auctionUnavai
 	}
 	return &auctionUnavailable{"pending", fmt.Sprintf("The first snapshot of the %s auction house is still downloading.", m.label()),
 		"Ask again in a few minutes."}
+}
+
+// auctionSignIn is the answer while prices would come from the project's mirror and the player has not signed in.
+func auctionSignIn() *auctionUnavailable {
+	return &auctionUnavailable{"sign-in", "Auction prices come from the project's server, which needs a one-time Battle.net sign-in first.",
+		backendSignIn + " Prices follow a few minutes later. A Battle.net API client of the player's own (Own Battle.net API client in the same menu) works without the sign-in."}
 }
 
 type auctionArgs struct {

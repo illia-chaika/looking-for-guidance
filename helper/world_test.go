@@ -17,7 +17,8 @@ import (
 	"time"
 )
 
-// fakeWorld serves a world dataset like data.lfguidance.com: one file per kind and the manifest listing them.
+// fakeWorld serves a world dataset like the project's server: one file per kind and the manifest listing them, for the
+// test's sign-in token only (useBackendToken).
 type fakeWorld struct {
 	srv      *httptest.Server
 	mu       sync.Mutex
@@ -33,6 +34,10 @@ func newFakeWorld(t *testing.T, kinds map[string]map[string]any, oldest string) 
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.asked = append(f.asked, r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer "+testBackendToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		if r.URL.Path == "/world/manifest.json" {
 			json.NewEncoder(w).Encode(f.manifest)
 			return
@@ -119,6 +124,7 @@ func testWorldWatcher(t *testing.T, base string, now time.Time) *worldWatcher {
 }
 
 func TestWorldDatasetDownloadsChangedFilesOnceADay(t *testing.T) {
+	useBackendToken(t)
 	f := newFakeWorld(t, testWorldRecords, time.Now().Add(-24*time.Hour).UTC().Format(time.RFC3339))
 	now := time.Now()
 	w := testWorldWatcher(t, f.srv.URL, now)
@@ -169,6 +175,7 @@ func TestWorldDatasetDownloadsChangedFilesOnceADay(t *testing.T) {
 }
 
 func TestWorldDatasetRefusesABadDownloadAndExpiresBattleNetData(t *testing.T) {
+	useBackendToken(t)
 	f := newFakeWorld(t, testWorldRecords, "")
 	f.manifest.Files[0].SHA256 = strings.Repeat("0", 64)
 	w := testWorldWatcher(t, f.srv.URL, time.Now())
@@ -196,6 +203,7 @@ func TestWorldDatasetRefusesABadDownloadAndExpiresBattleNetData(t *testing.T) {
 }
 
 func TestWorldToolsSearchAndRead(t *testing.T) {
+	useBackendToken(t)
 	f := newFakeWorld(t, testWorldRecords, "")
 	snapshots := filepath.Join(t.TempDir(), "snapshots")
 	if _, err := queryWorldSearch(snapshots, []byte(`{"query":"potion"}`)); err != errWorldAbsent {
@@ -287,6 +295,7 @@ func TestWorldToolsSearchAndRead(t *testing.T) {
 }
 
 func TestItemTableComesFromTheWorldDataset(t *testing.T) {
+	useBackendToken(t)
 	f := newFakeWorld(t, testWorldRecords, "")
 	snapshots := filepath.Join(t.TempDir(), "snapshots")
 	dir := auctionDir(snapshots)

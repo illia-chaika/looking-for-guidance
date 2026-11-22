@@ -15,6 +15,7 @@ local PRICES_OFF = {
     refused = "Blizzard не принимает сохранённый API-клиент Battle.net: убери его пунктом «Свой API-клиент Battle.net» в меню Looking for Guidance, и цены придут с зеркала проекта.",
     market = "Blizzard не публикует цены аукциона для рынка этого персонажа.",
     pending = "Цены аукциона ещё загружаются.",
+    ["sign-in"] = "Цены аукциона появятся после разового входа через Battle.net в меню Looking for Guidance: так требуют условия Blizzard, данные аккаунта не сохраняются.",
 }
 PRICES_OFF.failing = PRICES_OFF.pending
 

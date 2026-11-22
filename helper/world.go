@@ -2,8 +2,9 @@ package main
 
 // The world dataset: quests, NPCs, items, spells and places merged on the project's backend from ForeverDB's add-on
 // data (GPL-3.0; its credit is "Data from ForeverDB.net (https://foreverdb.net)"), Blizzard's Game Data API and the
-// numbers in the game client's tables, published at data.lfguidance.com. The tray downloads the files that changed
-// once a day; search_game_data and get_game_data answer from them without going online.
+// numbers in the game client's tables, served by the project's server to players who signed in with Battle.net
+// (backend_login.go). The tray downloads the files that changed once a day; search_game_data and get_game_data answer
+// from them without going online.
 
 import (
 	"bytes"
@@ -28,7 +29,7 @@ import (
 )
 
 const (
-	defaultWorldMirror = "https://data.lfguidance.com"
+	defaultWorldMirror = defaultAuctionMirror + "/v1" // the same server as the auction mirror, for the same sign-in
 	worldEvery         = 24 * time.Hour
 	worldMaxAge        = 30 * 24 * time.Hour // Blizzard's API terms: its data is kept at most 30 days
 	worldMaxFile       = 64 << 20
@@ -41,7 +42,8 @@ var (
 	worldKinds     = []string{"items", "quests", "npcs", "spells", "places"}
 	worldFileName  = regexp.MustCompile(`^[a-z]+(-[0-9]+)?-[0-9a-f]{16}\.json\.gz$`)
 	worldIDPattern = regexp.MustCompile(`^[a-z]*-?[0-9]{1,9}$`)
-	errWorldAbsent = errors.New("the world dataset is not on this computer yet: the companion downloads it from data.lfguidance.com a minute after it starts. Use other sources meanwhile")
+	errWorldAbsent = errors.New("the world dataset is not on this computer yet: the companion downloads it from the project's server a minute after it starts. Use other sources meanwhile")
+	errWorldSignIn = errors.New("the world dataset is not on this computer: it comes from the project's server, which needs a one-time Battle.net sign-in first. " + backendSignIn + " The dataset arrives a minute after the sign-in. Use other sources meanwhile")
 )
 
 func worldDir(snapshots string) string { return filepath.Join(filepath.Dir(snapshots), "world") }
@@ -90,6 +92,7 @@ type worldWatcher struct {
 	http *http.Client
 	base func() string
 	now  func() time.Time
+	lost func() // after the server turned the sign-in token down
 }
 
 // refresh downloads a new manifest and the files it lists that this computer lacks, at most once a day, and removes
@@ -104,8 +107,8 @@ func (w *worldWatcher) refresh(ctx context.Context) error {
 		return nil
 	}
 	base := strings.TrimSuffix(w.base(), "/")
-	if base == "" {
-		return nil
+	if base == "" || backendToken() == "" {
+		return nil // without the sign-in the tools say how to get it
 	}
 	body, err := w.get(ctx, base+"/world/manifest.json", 1<<20)
 	if err != nil {
@@ -172,13 +175,30 @@ func (w *worldWatcher) request(ctx context.Context, url string) (*http.Response,
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "looking-for-guidance/"+version)
-	resp, err := w.http.Do(req)
+	resp, err := w.do(req)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		return nil, fmt.Errorf("%s answered %s", url, resp.Status)
+	}
+	return resp, nil
+}
+
+// do sends a request to the server with the sign-in token. A refused token is forgotten, so that the menu offers the
+// sign-in again.
+func (w *worldWatcher) do(req *http.Request) (*http.Response, error) {
+	token := backendToken()
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := w.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		resp.Body.Close()
+		dropBackendToken(token, w.lost)
+		return nil, errSignInNeeded
 	}
 	return resp, nil
 }
@@ -226,13 +246,15 @@ func (w *worldWatcher) download(ctx context.Context, url, dest string, f worldFi
 // watchWorld runs in the tray for its whole life: a minute after start, then every hour, it lets refresh decide
 // whether a day has passed.
 func (a *app) watchWorld() {
-	w := &worldWatcher{dir: worldDir(snapshotDir()), http: &http.Client{Timeout: 5 * time.Minute}, base: worldMirrorURL, now: time.Now}
+	w := &worldWatcher{dir: worldDir(snapshotDir()), http: &http.Client{Timeout: 5 * time.Minute}, base: worldMirrorURL, now: time.Now,
+		lost: a.noteBackendToken}
 	wait := time.NewTimer(time.Minute)
 	defer wait.Stop()
 	for {
 		select {
 		case <-a.ctx.Done():
 			return
+		case <-worldWake:
 		case <-wait.C:
 		}
 		if err := w.refresh(a.ctx); err != nil {
@@ -289,6 +311,16 @@ func readWorldManifest(dir string) (*worldManifest, error) {
 
 // loadWorld reads the dataset once and again whenever the tray stores a new manifest.
 func loadWorld(snapshots string) (*worldData, error) { return loadWorldFrom(worldDir(snapshots)) }
+
+// loadWorldForTool is loadWorld for the adviser's tools: a missing dataset says how to get it when the sign-in is what
+// it waits for.
+func loadWorldForTool(snapshots string) (*worldData, error) {
+	d, err := loadWorld(snapshots)
+	if errors.Is(err, errWorldAbsent) && backendToken() == "" {
+		err = errWorldSignIn
+	}
+	return d, err
+}
 
 func loadWorldFrom(dir string) (*worldData, error) {
 	info, err := os.Stat(filepath.Join(dir, "manifest.json"))
@@ -1010,7 +1042,7 @@ func queryWorldSearch(dir string, raw []byte) (mcpObject, error) {
 	case strings.TrimSpace(a.Query) == "" && (a.Kind == "" || f.empty()):
 		return nil, errors.New("give a query, or a kind with at least one of zone, min_level, max_level and role (for example kind quests, zone Westfall, min_level 10, max_level 14)")
 	}
-	d, err := loadWorld(dir)
+	d, err := loadWorldForTool(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -1048,7 +1080,7 @@ func queryWorldGet(dir string, raw []byte) (mcpObject, error) {
 	if len(a.Refs) == 0 || len(a.Refs) > maxWorldRefs {
 		return nil, fmt.Errorf("refs lists 1 to %d records as {kind, id}", maxWorldRefs)
 	}
-	d, err := loadWorld(dir)
+	d, err := loadWorldForTool(dir)
 	if err != nil {
 		return nil, err
 	}

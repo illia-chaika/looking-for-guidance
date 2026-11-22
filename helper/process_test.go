@@ -65,9 +65,10 @@ func TestMain(m *testing.M) {
 			time.Sleep(time.Hour)
 		}
 	}
-	// Only the live checks read the player's real Battle.net client; the rest keep it in memory and leave the auction
-	// mirror and the world dataset's mirror off unless a test points them at a fake.
-	if os.Getenv("FOREVER_AUCTION") == "" && os.Getenv("FOREVER_LIVE") == "" {
+	// Only the live checks read the player's real Battle.net client and sign-in key; the rest keep them in memory and
+	// leave the auction mirror and the world dataset's mirror off unless a test points them at a fake.
+	if os.Getenv("FOREVER_AUCTION") == "" && os.Getenv("FOREVER_LIVE") == "" && os.Getenv("FOREVER_WORLD") == "" &&
+		os.Getenv("FOREVER_SIGNIN") == "" {
 		keyring.MockInit()
 		auctionMirrorURL = func() string { return "" }
 		worldMirrorURL = func() string { return "" }

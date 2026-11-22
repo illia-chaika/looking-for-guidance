@@ -11,12 +11,16 @@ import (
 	"time"
 )
 
-// TestLiveWorld downloads the world dataset from data.lfguidance.com and reads it through the adviser's tools:
+// TestLiveWorld downloads the world dataset from the project's server, with the Battle.net sign-in key stored by the
+// menu's Sign in with Battle.net, and reads it through the adviser's tools:
 //
 //	FOREVER_WORLD=1 go test -run TestLiveWorld -v ./helper
 func TestLiveWorld(t *testing.T) {
 	if os.Getenv("FOREVER_WORLD") == "" {
 		t.Skip("set FOREVER_WORLD=1 to download the real dataset")
+	}
+	if backendToken() == "" {
+		t.Fatal("choose Sign in with Battle.net in the companion's menu first: the server needs its key")
 	}
 	snapshots := filepath.Join(t.TempDir(), "snapshots")
 	w := &worldWatcher{dir: worldDir(snapshots), http: &http.Client{Timeout: 5 * time.Minute},

@@ -488,7 +488,8 @@ func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
 	}
 }
 
-// fakeMirror serves the test house the way the mirror does: gzip, Blizzard's Last-Modified, 304, no token.
+// fakeMirror serves the test house the way the mirror does: gzip, Blizzard's Last-Modified, 304, for the test's
+// sign-in token only.
 func fakeMirror(t *testing.T) (requests *[]string) {
 	t.Helper()
 	var seen []string
@@ -496,7 +497,11 @@ func fakeMirror(t *testing.T) (requests *[]string) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.URL.Path+" "+r.Header.Get("If-Modified-Since"))
 		body := map[string]string{"/v1/auctions/eu/114": testHouse, "/v1/auctions/eu/114/commodities": testCommodities}[r.URL.Path]
-		if body == "" || r.Header.Get("Authorization") != "" {
+		if r.Header.Get("Authorization") != "Bearer "+testBackendToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if body == "" {
 			http.NotFound(w, r)
 			return
 		}
@@ -519,6 +524,7 @@ func fakeMirror(t *testing.T) (requests *[]string) {
 
 func TestAuctionMirrorStandsInForAMissingClient(t *testing.T) {
 	requests := fakeMirror(t)
+	useBackendToken(t)
 
 	snapshots := filepath.Join(t.TempDir(), "snapshots")
 	dir := auctionDir(snapshots)

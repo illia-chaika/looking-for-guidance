@@ -100,7 +100,7 @@ func (w *worldWatcher) refreshChanges(ctx context.Context) error {
 		os.Remove(path) // unreadable or older than 30 days
 	}
 	base := strings.TrimSuffix(w.base(), "/")
-	if base == "" {
+	if base == "" || backendToken() == "" {
 		return nil
 	}
 	// The feed grows to a few megabytes over 30 days: ask with the last ETag and download it only when it changed.
@@ -113,7 +113,7 @@ func (w *worldWatcher) refreshChanges(ctx context.Context) error {
 	if tag, err := os.ReadFile(etagPath); err == nil && len(tag) > 0 && changesStamp(w.dir) != (time.Time{}) {
 		req.Header.Set("If-None-Match", string(tag))
 	}
-	resp, err := w.http.Do(req)
+	resp, err := w.do(req)
 	if err != nil {
 		return err
 	}
@@ -841,10 +841,11 @@ type changesAnswer struct {
 	Class   []changeItem `json:"class"`
 	General int          `json:"general"`
 	More    int          `json:"more,omitempty"`
-	Key     string       `json:"key,omitempty"`      // moves when the mine list does: the add-on announces it once
-	Data    bool         `json:"data"`               // whether the backend's data changes were here to compare
-	NoWorld bool         `json:"no_world,omitempty"` // names could not be resolved: the world dataset is missing
-	NoNotes bool         `json:"no_notes,omitempty"` // Blizzard's notes could not be read
+	Key     string       `json:"key,omitempty"`           // moves when the mine list does: the add-on announces it once
+	Data    bool         `json:"data"`                    // whether the backend's data changes were here to compare
+	NoWorld bool         `json:"no_world,omitempty"`      // names could not be resolved: the world dataset is missing
+	SignIn  bool         `json:"world_sign_in,omitempty"` // and it waits for the Battle.net sign-in
+	NoNotes bool         `json:"no_notes,omitempty"`      // Blizzard's notes could not be read
 }
 
 func answerChanges(req insightRequest, env insightEnv) (any, error) {
@@ -854,7 +855,7 @@ func answerChanges(req insightRequest, env insightEnv) (any, error) {
 	}
 	mine, class, general := matchChanges(f, env.Feed, env.Changes, env.World, time.Now())
 	out := changesAnswer{Mine: []changeItem{}, Class: []changeItem{}, General: len(general), Data: env.Changes != nil,
-		NoWorld: env.World == nil, NoNotes: env.Feed == nil}
+		NoWorld: env.World == nil, SignIn: env.World == nil && backendToken() == "", NoNotes: env.Feed == nil}
 	if env.Feed != nil {
 		out.URL = env.Feed.URL
 		if len(env.Feed.Days) > 0 {

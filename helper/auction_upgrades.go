@@ -204,6 +204,9 @@ func queryAuctionUpgrades(dir string, raw json.RawMessage) (mcpObject, error) {
 	}
 	items, err := loadItemTable(auctionDir(dir))
 	if err != nil {
+		if _, absent := readWorldManifest(worldDir(dir)); absent != nil && backendToken() == "" {
+			return nil, auctionSignIn() // the item table is built from the world dataset, which needs the sign-in
+		}
 		if why := loadAuctionStatus(auctionDir(dir)).Items; why != "" {
 			return nil, &auctionUnavailable{"failing", "Downloading the item table for upgrade searches fails: " + why + ".",
 				"The companion tries again every 20 minutes; meanwhile get_auction_prices still works for named items."}
