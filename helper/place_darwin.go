@@ -15,7 +15,6 @@ import (
 const (
 	appName      = "Looking for Guidance.app"
 	releaseAsset = "looking-for-guidance-macOS.zip"
-	moveButton   = "Move to Applications Folder"
 )
 
 var (
@@ -39,12 +38,15 @@ var (
 		return app, nil
 	}
 	askToMove = func(app, home string) (bool, error) {
-		question := "Move Looking for Guidance to the Applications folder?"
+		folder := "the Applications folder"
 		if home != "/Applications" {
-			question = "Move Looking for Guidance to the Applications folder in your home folder?"
+			folder += " in your home folder"
 		}
-		text := question + "\n\nLooking for Guidance removes the copy in the current folder."
-		script := []string{"on run argv", `display dialog (item 1 of argv) with title "Looking for Guidance" buttons {"Do Not Move", "` + moveButton + `"} default button 2`}
+		text := "Install Looking for Guidance in " + folder + "?"
+		if source, _ := originalPath(app); source != "" {
+			text += "\n\nLooking for Guidance removes the copy in the current folder."
+		}
+		script := []string{"on run argv", `display dialog (item 1 of argv) with title "Looking for Guidance" buttons {"Keep Here", "Install"} default button 2`}
 		args := []string{text}
 		if icon := filepath.Join(app, "Contents", "Resources", "AppIcon.icns"); isFile(icon) {
 			script[1] += " with icon (POSIX file (item 2 of argv))"
@@ -56,11 +58,27 @@ var (
 			cmd = append(cmd, "-e", line)
 		}
 		out, err := exec.Command("osascript", append(cmd, args...)...).Output()
-		return strings.TrimSpace(string(out)) == moveButton, err
+		return strings.TrimSpace(string(out)) == "Install", err
 	}
 )
 
 func appExe(app string) string { return filepath.Join(app, "Contents", "MacOS", "LookingForGuidance") }
+
+// originalPath is the source to remove after installation. Leave the contents of a mounted disk image alone.
+func originalPath(app string) (string, error) {
+	source, err := preTranslocationPath(app)
+	if err != nil {
+		return "", err
+	}
+	var volume unix.Statfs_t
+	if err := unix.Statfs(source, &volume); err != nil {
+		return "", err
+	}
+	if volume.Flags&unix.MNT_RDONLY != 0 {
+		return "", nil
+	}
+	return source, nil
+}
 
 // copyApp copies the bundle with its code signature. It removes the quarantine flag, as Finder does when the player
 // moves an app, so macOS does not open the copy from a random read-only location (App Translocation).

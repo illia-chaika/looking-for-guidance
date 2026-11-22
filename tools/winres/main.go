@@ -1,7 +1,7 @@
-// Command winres compiles the icons named in a Windows resource script into the COFF object that the Go linker puts
-// into a Windows executable, so Explorer shows the app's icon:
+// Command winres compiles the Windows icon and, for release builds, the notices distributed with the app into a
+// COFF object for the Go linker:
 //
-//	go run ./tools/winres helper/windows.rc helper/resource_windows_amd64.syso
+//	go run ./tools/winres helper/windows.rc helper/resource_windows_amd64.syso [Licenses.txt]
 //
 // It stands in for windres, which the original project ran on a Windows build machine and macOS lacks. It reads only
 // the statement helper/windows.rc uses, `<id> ICON "<file.ico>"`, and stops at anything else. The output depends on
@@ -23,6 +23,7 @@ import (
 
 const (
 	rtIcon      = 3
+	rtRawData   = 10
 	rtGroupIcon = 14
 	langEnUS    = 0x409
 	// Missing from debug/pe.
@@ -36,12 +37,22 @@ type resource struct {
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fail(errors.New("usage: go run ./tools/winres <script.rc> <output.syso>"))
+	if len(os.Args) != 3 && len(os.Args) != 4 {
+		fail(errors.New("usage: go run ./tools/winres <script.rc> <output.syso> [Licenses.txt]"))
 	}
 	res, err := readScript(os.Args[1])
 	if err != nil {
 		fail(err)
+	}
+	if len(os.Args) == 4 {
+		notices, err := os.ReadFile(os.Args[3])
+		if err != nil {
+			fail(err)
+		}
+		if len(notices) == 0 {
+			fail(errors.New("empty release notices"))
+		}
+		res = append(res, resource{rtRawData, 1, notices})
 	}
 	obj, err := object(res)
 	if err != nil {

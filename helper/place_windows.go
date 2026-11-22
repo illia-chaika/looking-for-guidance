@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +43,24 @@ var (
 )
 
 func appExe(app string) string { return app }
+
+// Each release carries its own notices as raw resource 1. An older updater replaces only the EXE, which is why
+// the installed copy writes the text on startup, including the first start after an update.
+func refreshInstalledLicenses(app string) error {
+	info, err := windows.FindResource(0, windows.ResourceID(1), windows.RT_RCDATA)
+	if err != nil {
+		return err
+	}
+	notices, err := windows.LoadResourceData(0, info)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(filepath.Dir(app), "Licenses.txt")
+	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, notices) {
+		return nil
+	}
+	return writeFileAtomic(path, notices)
+}
 
 func copyApp(src, dst string) error {
 	in, err := os.Open(src)

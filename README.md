@@ -9,9 +9,9 @@ Every player has typed LFG. This is the other kind: looking for guidance.
 Ask it things like *"Where do I hand this quest in?"*, *"Is this staff better than mine?"*, *"What should I sell
 before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
 
-> **Status: first release.** A ready-made app for macOS 12 or later on Apple Silicon and Intel, signed and notarized
-> by Apple (see [Setup](#setup)). The Windows download is experimental: it has never been run on Windows and is not
-> signed. Advice runs on your own Claude or ChatGPT plan, through Claude Code or the Codex CLI.
+> The macOS download is signed with Developer ID and notarized by Apple. The Windows download is experimental
+> and unsigned. See [Setup](#setup) for downloads and installation. Advice runs on your own Claude or ChatGPT
+> plan, through Claude Code or the Codex CLI.
 
 <p align="center"><img src="docs/chat.png" width="640" alt="The chat window: a question about a chest upgrade, answered with three items from the character's auction house and their prices"></p>
 
@@ -149,11 +149,13 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
 
 ## Setup
 
-**You need:** macOS 12 or later, the game client with a `_forever_` folder, and **one** of the two agents: Claude
-Code with a Claude plan, or the Codex CLI with a ChatGPT plan.
+You need the game client with a `_forever_` folder and one of the two advisers, Claude Code with a Claude plan
+or the Codex CLI with a ChatGPT plan.
 
-1. Download [looking-for-guidance-macOS.zip](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-macOS.zip)
-   and open the app inside. It offers to move itself to the Applications folder.
+**On macOS 12 or later (Apple Silicon and Intel)**
+
+1. [Download the macOS disk image](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-macOS.dmg).
+   Open it, drag **Looking for Guidance** onto **Applications**, then open the app from Applications. You can eject the disk image.
 2. Pick the game folder from its menu bar icon and let it install the add-on.
 3. Choose *Sign in with Battle.net…* in the same menu for auction prices and the world database (see
    [Cost and privacy](#cost-and-privacy) for what it does and does not share). You can do it later, too.
@@ -163,15 +165,12 @@ The app looks for a new version once a day, or when you choose *Check for Update
 while the game is closed. Versions 0.10.0 and 0.10.1 never check: download the current one once by hand. To build it
 yourself, see [Development](#development).
 
-**On Windows (experimental).** The Windows download is built from the same code but has never been run on Windows,
-so expect problems, and please report what you find in an
-[issue](https://github.com/illia-chaika/looking-for-guidance/issues). It needs Windows 10 or later on x64.
+**On Windows 10 or later (x64, experimental)**
 
-1. Download [looking-for-guidance-Windows.zip](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-Windows.zip),
-   unzip it and open `Looking for Guidance.exe`. It moves itself to `%LOCALAPPDATA%\Programs\looking-for-guidance`
-   and adds itself to the Start menu.
-2. The app is not signed, so Microsoft Defender SmartScreen stops it with *Windows protected your PC*. Choose
-   **More info**, then **Run anyway**.
+1. [Download the Windows app](https://github.com/illia-chaika/looking-for-guidance/releases/latest/download/looking-for-guidance-Windows.exe)
+   and open the EXE. It installs itself in `%LOCALAPPDATA%\Programs\looking-for-guidance` and adds a Start menu shortcut.
+2. The EXE is unsigned. If Microsoft Defender SmartScreen shows *Windows protected your PC*, choose **More info**
+   and **Run anyway** to open the app.
 3. Pick the game folder from its icon in the notification area, let it install the add-on, and type `/ask` in the
    game.
 
@@ -344,14 +343,16 @@ Building needs Xcode command line tools, Go (the toolchain named in `go.mod`) an
 python3 tools/install-local-macos.py       # installs the app and the add-on; close the game first
 ```
 
-Maintainers make the release download with `./tools/release-macos.sh`: it signs with Developer ID, has Apple notarize
-the app and packs `dist/looking-for-guidance-macOS.zip`. It needs a Developer ID identity in the keychain
+Maintainers run `./tools/release-macos.sh` to build `dist/looking-for-guidance-macOS.dmg` for new installations and
+`dist/looking-for-guidance-macOS.zip` for the updater. The script signs and notarizes the app and the disk image.
+It needs `dmgbuild`, a Developer ID Application identity in the keychain
 (`LFG_SIGN_IDENTITY` picks one if there are several) and a profile from `xcrun notarytool store-credentials`
 (`LFG_NOTARY_PROFILE`, default `lfg-notary`).
 
-`./tools/build-windows.sh` makes the experimental Windows download on a Mac: `dist/looking-for-guidance-Windows.zip`,
-unsigned, with the executable (which carries the add-on) and the licences. On Windows, with that ZIP in `dist/`,
-`go test -run TestBuiltZipUnpacks ./helper` unpacks it with the updater's own code.
+`./tools/build-windows.sh` builds the unsigned `dist/looking-for-guidance-Windows.exe` on a Mac. It includes the
+add-on and the licences. The script also packs that executable into `dist/looking-for-guidance-Windows.zip`
+for the updater. On Windows, with both files in `dist/`, `go test -run TestBuiltZipUnpacks ./helper` unpacks
+the ZIP with the updater's own code and checks the executable and its embedded notices.
 
 ```sh
 go test ./...
@@ -385,7 +386,7 @@ referenced by path.
 
 ## Roadmap
 
-- A tested and signed Windows build: the experimental one has not run on Windows yet
+- Verify the full Windows experience in the game and add Windows code signing.
 
 ## Licence and credits
 

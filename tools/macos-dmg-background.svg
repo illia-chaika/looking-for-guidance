@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="600" viewBox="0 0 660 300">
+  <!-- Render with rsvg-convert -o tools/macos-dmg-background@2x.png tools/macos-dmg-background.svg -->
+  <defs>
+    <linearGradient id="paper" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#fffaf1"/>
+      <stop offset="1" stop-color="#f0e7d7"/>
+    </linearGradient>
+  </defs>
+  <rect width="660" height="300" fill="url(#paper)"/>
+  <path d="M290 135h78m-20-19 20 19-20 19" fill="none" stroke="#906328"
+        stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

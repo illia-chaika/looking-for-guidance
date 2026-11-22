@@ -43,9 +43,8 @@ import (
 	"unsafe"
 )
 
-// originalPath finds where the player unzipped the app when macOS opened it from a random read-only folder (App
-// Translocation). macOS has no public interface for this.
-func originalPath(app string) (string, error) {
+// preTranslocationPath finds the original bundle when macOS runs a quarantined app from a random read-only folder.
+func preTranslocationPath(app string) (string, error) {
 	if !strings.Contains(app, "/AppTranslocation/") {
 		return app, nil
 	}

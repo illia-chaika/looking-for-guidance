@@ -10,6 +10,22 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func TestReadOnlyVolumeIsNotQueuedForRemoval(t *testing.T) {
+	// The sealed system volume provides a read-only mount without creating and attaching a test disk image.
+	system := "/System/Library"
+	var volume unix.Statfs_t
+	if err := unix.Statfs(system, &volume); err != nil {
+		t.Fatal(err)
+	}
+	if volume.Flags&unix.MNT_RDONLY == 0 {
+		t.Skip("this Mac has a writable system volume")
+	}
+	source, err := originalPath(system)
+	if err != nil || source != "" {
+		t.Fatalf("read-only source queued for removal: %q, %v", source, err)
+	}
+}
+
 // A downloaded app that macOS opens from a random read-only folder finds the folder it was unzipped to, so the moved
 // copy can remove it.
 func TestTranslocatedAppFindsWhereItWasUnzipped(t *testing.T) {

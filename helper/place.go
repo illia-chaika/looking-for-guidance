@@ -29,6 +29,9 @@ func placeApp(s *settings) (exe, from string, err error) {
 	homes := appHomes()
 	for _, home := range homes {
 		if inside(app, home) {
+			if err := refreshInstalledLicenses(app); err != nil {
+				logf("Couldn't write the installed licences: %v", err)
+			}
 			return "", "", nil
 		}
 	}
