@@ -1,0 +1,53 @@
+name: Verify Windows release downloads
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag with the Windows EXE and ZIP to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Dispatch on the candidate commit or branch. A draft's tag may only be created when it is published.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Download the prepared release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Expected a version tag" }
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --dir dist --pattern 'looking-for-guidance-Windows.exe' --pattern 'looking-for-guidance-Windows.zip'
+      - name: Verify the direct download and ZIP contents
+        run: go test -count=1 -run '^TestBuiltZipUnpacks$' -v ./helper
+      - uses: actions/checkout@v7
+        with:
+          ref: v0.15.0
+          path: previous
+          persist-credentials: false
+      - name: Unpack the release with the v0.15.0 updater
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory previous/dist | Out-Null
+          Copy-Item dist/looking-for-guidance-Windows.zip previous/dist/
+          Set-Location previous
+          go test -count=1 -run '^TestBuiltZipUnpacks$' -v ./helper
+      - name: Start the standalone app and verify the installed copy
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: ./test/windows_distribution.ps1 -ReleaseTag $env:RELEASE_TAG
