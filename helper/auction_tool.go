@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +18,8 @@ const (
 	maxAuctionItems    = 50
 	auctionShownTiers  = 5
 	auctionStaleAfter  = 6 * time.Hour
-	auctionToolMessage = "Asking prices on this character's own auction house from Blizzard's snapshot: lowest buyout per unit in copper and the quantity on sale. They are not sale prices; a non-commodity stack is bought whole."
+	auctionFetchLimit  = 45 * time.Second // downloading a house the tray does not keep, from a tool call
+	auctionToolMessage = "Asking prices on the auction house named in market from Blizzard's snapshot: lowest buyout per unit in copper and the quantity on sale. They are not sale prices; a non-commodity stack is bought whole. history, where present, is the item's lowest asking price per day (any variant) over the days this companion saw the house: usual_unit is the median of the daily medians, recent lists date, median price and median quantity on sale."
 )
 
 func auctionToolSchema() mcpObject {
@@ -29,6 +31,7 @@ func auctionToolSchema() mcpObject {
 					"link": mcpObject{"type": "string", "maxLength": 512, "description": "Exact item link of a carried or worn variant, to price that random suffix"},
 				}}},
 		"quantity": mcpObject{"type": "integer", "minimum": 1, "maximum": 100000, "description": "Optional: also return what buying this many of each would cost"},
+		"market":   marketArgSchema(),
 	}
 }
 
@@ -70,10 +73,63 @@ func auctionProblem(dir string, m auctionMarket, marketErr error) *auctionUnavai
 	}
 	if why := status.Failing[m.key()]; why != "" {
 		return &auctionUnavailable{"failing", fmt.Sprintf("Downloading the %s auction house fails: %s.", m.label(), why),
-			"The companion tries again every 20 minutes. Nothing to do unless it lasts; then the cause is in helper.log."}
+			"The companion tries again within 20 minutes. Nothing to do unless it lasts; then the cause is in helper.log."}
 	}
 	return &auctionUnavailable{"pending", fmt.Sprintf("The first snapshot of the %s auction house is still downloading.", m.label()),
 		"Ask again in a few minutes."}
+}
+
+// toolMarket is the house an auction tool reads: the character's own, or the one its market argument names. A house
+// other than the character's own is downloaded on the spot when its book is missing or a newer snapshot is due; the
+// tray keeps only the houses the game reported.
+func toolMarket(dir string, s gameSnapshot, arg *marketArg) (auctionMarket, *auctionUnavailable) {
+	own, err := snapshotMarket(s)
+	m := own
+	if arg != nil {
+		m, err = arg.apply(own, err)
+	}
+	if err == nil && arg != nil && m != own {
+		if problem := fetchMarketNow(dir, m); problem != nil {
+			return m, problem
+		}
+	}
+	return m, auctionProblem(dir, m, err)
+}
+
+// fetchMarketNow downloads one house for a tool call unless its stored book is current. Without a source it leaves
+// the answer to auctionProblem; when the download fails, an older book is still read (marked stale when old).
+func fetchMarketNow(dir string, m auctionMarket) *auctionUnavailable {
+	w := newAuctionWatcher(auctionDir(dir))
+	path := filepath.Join(w.dir, m.key()+".json")
+	var modified, tried time.Time
+	if st, err := os.Stat(path); err == nil {
+		tried = st.ModTime()
+		if book, err := loadAuctionBook(path); err == nil {
+			modified = book.modifiedAt()
+		}
+	}
+	if !modified.IsZero() && nextAuctionCheck(modified, tried, w.now()).After(w.now()) {
+		return nil
+	}
+	src, token := w.source()
+	if src == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), auctionFetchLimit)
+	defer cancel()
+	_, err := w.update(ctx, src, m)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, errSignInNeeded):
+		dropBackendToken(token, nil)
+		return auctionSignIn()
+	case !modified.IsZero():
+		logf("Auction house %s, asked by a tool: %v", m.label(), err)
+		return nil
+	}
+	return &auctionUnavailable{"failing", fmt.Sprintf("Downloading the %s auction house failed: %v.", m.label(), err),
+		"Ask again later; if it lasts, the cause is in helper.log."}
 }
 
 // auctionSignIn is the answer while prices would come from the project's mirror and the player has not signed in.
@@ -88,7 +144,8 @@ type auctionArgs struct {
 		ID   int    `json:"id"`
 		Link string `json:"link,omitempty"`
 	} `json:"items"`
-	Quantity int `json:"quantity,omitempty"`
+	Quantity int        `json:"quantity,omitempty"`
+	Market   *marketArg `json:"market,omitempty"`
 }
 
 func queryAuctionPrices(dir string, raw []byte) (mcpObject, error) {
@@ -103,8 +160,8 @@ func queryAuctionPrices(dir string, raw []byte) (mcpObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, err := snapshotMarket(s)
-	if problem := auctionProblem(dir, m, err); problem != nil {
+	m, problem := toolMarket(dir, s, a.Market)
+	if problem != nil {
 		return nil, problem
 	}
 	book, err := loadAuctionBook(filepath.Join(auctionDir(dir), m.key()+".json"))
@@ -121,11 +178,22 @@ func queryAuctionPrices(dir string, raw []byte) (mcpObject, error) {
 		}
 	}
 	var items []mcpObject
+	ids, current := make([]int, 0, len(a.Items)), map[int]int64{}
 	for _, want := range a.Items {
 		if want.ID <= 0 {
 			return nil, errors.New("item IDs start at 1")
 		}
 		items = append(items, auctionEntry(book.Items[want.ID], want.ID, want.Link, a.Quantity))
+		ids = append(ids, want.ID)
+		if it := book.Items[want.ID]; it != nil {
+			current[want.ID] = it.Unit
+		}
+	}
+	history := auctionHistory(filepath.Join(auctionDir(dir), "history", m.key()), ids, current, time.Now())
+	for i, want := range a.Items {
+		if h := history[want.ID]; h != nil {
+			items[i]["history"] = h
+		}
 	}
 	out["items"] = items
 	return out, nil

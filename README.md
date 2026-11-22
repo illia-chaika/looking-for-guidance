@@ -221,14 +221,23 @@ system's credential store, never in a file:
 - Windows: Credential Manager, under Windows Credentials, as the generic credentials `lfg-battlenet-id:battlenet` and
   `lfg-battlenet-secret:battlenet`.
 
-While it runs, the companion checks every market the game reported in the past week every 20 minutes and downloads
-it when there is a newer snapshot. It keeps a summary in the `auctions` folder beside `settings.json`
+While it runs, the companion keeps every market the game reported in the past week up to date. It asks about a market
+again when its next snapshot is due, about 65 minutes after the last one, then every 10 minutes while it is late and
+every 20 minutes once it is half an hour late. It keeps a summary in the `auctions` folder beside `settings.json`
 (`~/Library/Application Support/Looking for Guidance/auctions/` on macOS, `%AppData%\Looking for Guidance\auctions\`
 on Windows) and a price history for 30 days, the longest Blizzard's API terms allow (about 1 MB a day per market,
-compressed), and offers the adviser two
-tools: `get_auction_prices` for the price of named items, and `find_auction_upgrades`, which picks the auctions for one
-equipment slot within a budget and lets the running game drop what the character cannot wear and read each
-candidate's exact stats. For that search it takes each item's class and equipment slot from the world dataset.
+compressed, plus a summary of each finished day of about 180 KB). It offers the adviser two tools:
+
+- `get_auction_prices` for the price of named items. Once the companion has seen a market on three days, it also gives
+  each item's usual lowest price on those days, the lowest it went, the last seven days and how far today's price is
+  from the usual one.
+- `find_auction_upgrades`, which picks the auctions for one equipment slot within a budget and lets the running game
+  drop what the character cannot wear and read each candidate's exact stats. For that search it takes each item's
+  class and equipment slot from the world dataset.
+
+Both tools can also read another auction house: the other faction's, the neutral one both factions reach, or another
+region's or ruleset's. The companion downloads such a house when the adviser asks for it, which can take up to a
+minute, and does not keep it up to date afterwards.
 
 To see that it works, look for `Auction house EU Normal Horde (house 114): new snapshot downloaded`, with your own
 market, in `helper.log` beside `settings.json`; the journal's Bags section then shows prices with the snapshot's time.
@@ -245,7 +254,7 @@ which the adviser passes on in your language; the Bags section says it in one li
 - The character's market has no data in the API. Normal and PvP markets are known; which auction house serves each
   Roleplay ruleset is not known yet, and hardcore characters trade on a market the API does not list.
 - The first download is still running, or failing, as when the mirror or Blizzard cannot be reached; the companion
-  tries again every 20 minutes and `helper.log` says why.
+  tries again within 20 minutes and `helper.log` says why.
 
 To stop using your own client, choose *Own Battle.net API client* again and confirm: the companion removes it from the
 credential store and goes back to the mirror. With `"auctionMirror": "off"` as well, nothing is downloaded. Prices

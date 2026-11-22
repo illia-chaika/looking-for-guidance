@@ -404,6 +404,9 @@ type auctionWatcher struct {
 	mirror func() string // the mirror's address, or "" when it is off
 	now    func() time.Time
 	lost   func() // after the server turned the sign-in token down
+
+	tried    map[string]time.Time // market key: when it was last asked about
+	modified map[string]time.Time // market key: Blizzard's Last-Modified of the stored book
 }
 
 func newAuctionWatcher(dir string) *auctionWatcher {
@@ -442,6 +445,9 @@ func (w *auctionWatcher) update(ctx context.Context, src auctionSource, m auctio
 			got[part[0]] = fresh
 		}
 		if !got["auctions"] && !got["commodities"] {
+			if w.modified != nil {
+				w.modified[m.key()] = old.modifiedAt() // the stored book may be newer than this watcher knew
+			}
 			now := w.now()
 			return false, os.Chtimes(path, now, now) // confirmed current
 		}
@@ -465,6 +471,9 @@ func (w *auctionWatcher) update(ctx context.Context, src auctionSource, m auctio
 	if err := writeFileAtomic(path, data); err != nil {
 		return false, err
 	}
+	if w.modified != nil {
+		w.modified[m.key()] = book.modifiedAt()
+	}
 	return true, w.remember(book)
 }
 
@@ -476,10 +485,7 @@ func (w *auctionWatcher) remember(book *auctionBook) error {
 		return err
 	}
 	now := w.now().UTC()
-	row := struct {
-		T     int64            `json:"t"`
-		Items map[int][2]int64 `json:"items"`
-	}{book.Fetched, map[int][2]int64{}}
+	row := auctionRow{T: book.Fetched, Items: map[int][2]int64{}}
 	for id, it := range book.Items {
 		row.Items[id] = [2]int64{it.Unit, int64(it.Listed)}
 	}
@@ -516,6 +522,10 @@ func (w *auctionWatcher) remember(book *auctionBook) error {
 				return err
 			}
 		}
+	}
+	// A finished day is also kept as one summary, which get_auction_prices reads (auction_history.go).
+	if err := summarizeAuctionHistory(folder, today, cutoff); err != nil {
+		logf("Price history of %s: %v", book.Market.label(), err)
 	}
 	return nil
 }
@@ -630,44 +640,80 @@ func (w *auctionWatcher) saveStatus(s auctionStatus) {
 	}
 }
 
-func (w *auctionWatcher) refresh(ctx context.Context) {
+// source is where snapshots come from: the player's own Battle.net client, otherwise the project's mirror with the
+// sign-in token (also returned, to drop it when the server refuses it); nil when neither is set up.
+func (w *auctionWatcher) source() (auctionSource, string) {
 	// Read the client every time: one removed or replaced in the menu must not go on with the old token.
 	id, _, ok := w.bn.client()
 	if !ok || id != w.bn.id {
 		w.bn.token = ""
 	}
-	status := auctionStatus{Failing: map[string]string{}}
-	var src auctionSource = w.bn
-	var token string
-	if !ok {
-		base := w.mirror()
-		if token = backendToken(); base == "" || token == "" {
-			w.saveStatus(status) // without the sign-in the tools and the journal say how to get it
-			return
-		}
-		src = &auctionMirror{base: base, http: w.bn.http, token: token}
+	if ok {
+		return w.bn, ""
 	}
-	markets := recentMarkets(w.dir, w.now())
+	base, token := w.mirror(), backendToken()
+	if base == "" || token == "" {
+		return nil, "" // without the sign-in the tools and the journal say how to get it
+	}
+	return &auctionMirror{base: base, http: w.bn.http, token: token}, token
+}
+
+// refresh asks about every market whose next snapshot is due (nextAuctionCheck) and returns when the next one is.
+func (w *auctionWatcher) refresh(ctx context.Context) time.Time {
+	now := w.now()
+	next := now.Add(auctionEvery)
+	status := auctionStatus{Failing: map[string]string{}}
+	src, token := w.source()
+	if src == nil {
+		w.saveStatus(status)
+		return next
+	}
+	if w.tried == nil {
+		w.tried, w.modified = map[string]time.Time{}, map[string]time.Time{}
+	}
+	previous := loadAuctionStatus(w.dir)
+	markets := recentMarkets(w.dir, now)
 	for _, m := range markets {
+		key := m.key()
+		if _, known := w.modified[key]; !known {
+			if book, err := loadAuctionBook(filepath.Join(w.dir, key+".json")); err == nil {
+				w.modified[key] = book.modifiedAt()
+			} else {
+				w.modified[key] = time.Time{}
+			}
+		}
+		if due := nextAuctionCheck(w.modified[key], w.tried[key], now); due.After(now) {
+			if why := previous.Failing[key]; why != "" {
+				status.Failing[key] = why
+			}
+			if due.Before(next) {
+				next = due
+			}
+			continue
+		}
+		w.tried[key] = now
 		changed, err := w.update(ctx, src, m)
 		switch {
 		case errors.Is(err, errNoBattleNetClient):
 			w.saveStatus(auctionStatus{})
-			return
+			return now.Add(auctionEvery)
 		case errors.Is(err, errBattleNetRefused):
 			logf("Auction prices: %v", err)
 			w.saveStatus(auctionStatus{Refused: err.Error()})
-			return
+			return now.Add(auctionEvery)
 		case errors.Is(err, errSignInNeeded):
 			logf("Auction prices: %v; the stored sign-in is removed", err)
 			dropBackendToken(token, w.lost)
 			w.saveStatus(auctionStatus{})
-			return
+			return now.Add(auctionEvery)
 		case err != nil:
 			logf("Auction house %s: %v", m.label(), err)
-			status.Failing[m.key()] = err.Error()
+			status.Failing[key] = err.Error()
 		case changed:
 			logf("Auction house %s: new snapshot downloaded", m.label())
+		}
+		if due := nextAuctionCheck(w.modified[key], now, now); due.Before(next) {
+			next = due
 		}
 	}
 	if len(markets) > 0 {
@@ -677,6 +723,7 @@ func (w *auctionWatcher) refresh(ctx context.Context) {
 		}
 	}
 	w.saveStatus(status)
+	return next
 }
 
 // watchAuctions runs in the tray for its whole life, with or without the game.
@@ -692,7 +739,7 @@ func (a *app) watchAuctions() {
 		case <-auctionWake:
 		case <-wait.C:
 		}
-		w.refresh(a.ctx)
-		wait.Reset(auctionEvery)
+		next := w.refresh(a.ctx)
+		wait.Reset(min(max(time.Until(next), time.Minute), auctionEvery))
 	}
 }

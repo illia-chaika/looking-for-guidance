@@ -44,9 +44,9 @@ func gameTools(dir string) []mcpObject {
 	}
 	// Both are always offered, so that without prices the adviser hears why and what the player can do.
 	unavailable := " When there are no prices it answers available:false with the reason and what_to_do; tell the player both in their language."
-	tools = append(tools, tool("get_auction_prices", "Read current asking prices on this character's own auction house: lowest buyout per unit in copper, quantity on sale, cheapest price levels and the cost of buying a quantity, with the snapshot's time. Pass item IDs; pass a carried item's exact link to price that random-suffix variant. Use before advising a purchase or a sale."+unavailable,
+	tools = append(tools, tool("get_auction_prices", "Read current asking prices on this character's own auction house, or another one given in market (another faction, the neutral house, another region or ruleset): lowest buyout per unit in copper, quantity on sale, cheapest price levels and the cost of buying a quantity, with the snapshot's time, and how the price compares with its usual price over the days the companion saw the house. Pass item IDs; pass a carried item's exact link to price that random-suffix variant. Use before advising a purchase or a sale."+unavailable,
 		auctionToolSchema(), []string{"snapshot_id", "items"}))
-	tools = append(tools, tool("find_auction_upgrades", "Search this character's own auction house for one equipment slot within a budget. The running game drops what the character cannot wear and returns the strongest candidates with their exact stats and asking prices, and the stats of what is worn there now; weigh them for the class. Takes up to a minute."+unavailable,
+	tools = append(tools, tool("find_auction_upgrades", "Search this character's own auction house, or another one given in market, for one equipment slot within a budget. The running game drops what the character cannot wear and returns the strongest candidates with their exact stats and asking prices, and the stats of what is worn there now; weigh them for the class. Takes up to a minute."+unavailable,
 		upgradeToolSchema(), []string{"snapshot_id", "slot", "budget"}))
 	// The world tools read no snapshot, so they do not offer snapshot_id (and ignore one passed out of habit).
 	world := func(name, description string, properties mcpObject, required []string) mcpObject {

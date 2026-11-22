@@ -116,9 +116,9 @@ func fakeBattleNet(t *testing.T) (requests *[]string) {
 		}
 		w.Header().Set("Last-Modified", current)
 		switch r.URL.Path {
-		case "/data/wow/ruleset/2/auctions/114":
+		case "/data/wow/ruleset/2/auctions/114", "/data/wow/ruleset/2/auctions/117":
 			fmt.Fprint(w, testHouse)
-		case "/data/wow/ruleset/2/auctions/114/commodities":
+		case "/data/wow/ruleset/2/auctions/114/commodities", "/data/wow/ruleset/2/auctions/117/commodities":
 			fmt.Fprint(w, testCommodities)
 		default:
 			http.NotFound(w, r)
@@ -473,6 +473,8 @@ func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
 
 	// Another client in the menu does not go on with the old one's token, and a refusal is noted for the tools.
 	id, secret = "other", "wrong"
+	now = now.Add(auctionEvery) // the house is asked about again only when it is due
+	w.now = func() time.Time { return now }
 	w.refresh(ctx)
 	if status := loadAuctionStatus(dir); !strings.Contains(status.Refused, "401") {
 		t.Fatalf("a refused client is noted: %+v", status)
@@ -480,6 +482,7 @@ func TestAuctionWatcherFollowsTheStoredClient(t *testing.T) {
 
 	// Without a client the token is dropped at once and nothing is noted any more.
 	id, secret = "client", "secret"
+	now = now.Add(auctionEvery)
 	w.refresh(ctx)
 	id = ""
 	w.refresh(ctx)
@@ -548,6 +551,11 @@ func TestAuctionMirrorStandsInForAMissingClient(t *testing.T) {
 		t.Fatal("prices are there:", p)
 	}
 	*requests = nil
+	if next := w.refresh(ctx); len(*requests) != 0 || !next.Equal(now.Add(auctionEvery)) {
+		t.Fatal("a house just asked about waits for its next check:", *requests, next)
+	}
+	now = now.Add(auctionEvery)
+	w.now = func() time.Time { return now }
 	w.refresh(ctx)
 	if len(*requests) != 2 || (*requests)[0] != "/v1/auctions/eu/114 Fri, 20 Nov 2026 17:23:20 GMT" {
 		t.Fatal("an unchanged house is only asked about:", *requests)

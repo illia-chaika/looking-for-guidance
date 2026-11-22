@@ -163,10 +163,11 @@ func upgradeCandidates(book *auctionBook, items *itemTable, slot string, budget 
 }
 
 type upgradeArgs struct {
-	ID     string `json:"snapshot_id"`
-	Slot   string `json:"slot"`
-	Budget int64  `json:"budget"`
-	Ahead  int    `json:"levels_ahead,omitempty"`
+	ID     string     `json:"snapshot_id"`
+	Slot   string     `json:"slot"`
+	Budget int64      `json:"budget"`
+	Ahead  int        `json:"levels_ahead,omitempty"`
+	Market *marketArg `json:"market,omitempty"`
 }
 
 func upgradeToolSchema() mcpObject {
@@ -179,6 +180,7 @@ func upgradeToolSchema() mcpObject {
 		"slot":         mcpObject{"type": "string", "enum": slots},
 		"budget":       mcpObject{"type": "integer", "minimum": 1, "description": "Most the player will pay for one item, in copper (10000 = 1 gold)"},
 		"levels_ahead": mcpObject{"type": "integer", "minimum": 0, "maximum": 5, "description": "Also include items the character can wear within this many levels"},
+		"market":       marketArgSchema(),
 	}
 }
 
@@ -194,8 +196,8 @@ func queryAuctionUpgrades(dir string, raw json.RawMessage) (mcpObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, err := snapshotMarket(s)
-	if problem := auctionProblem(dir, m, err); problem != nil {
+	m, problem := toolMarket(dir, s, a.Market)
+	if problem != nil {
 		return nil, problem
 	}
 	book, err := loadAuctionBook(filepath.Join(auctionDir(dir), m.key()+".json"))
@@ -209,7 +211,7 @@ func queryAuctionUpgrades(dir string, raw json.RawMessage) (mcpObject, error) {
 		}
 		if why := loadAuctionStatus(auctionDir(dir)).Items; why != "" {
 			return nil, &auctionUnavailable{"failing", "Downloading the item table for upgrade searches fails: " + why + ".",
-				"The companion tries again every 20 minutes; meanwhile get_auction_prices still works for named items."}
+				"The companion tries again within 20 minutes; meanwhile get_auction_prices still works for named items."}
 		}
 		return nil, &auctionUnavailable{"pending", "The item table for upgrade searches is still downloading.", "Ask again in a few minutes."}
 	}

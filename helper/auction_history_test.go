@@ -168,3 +168,80 @@ func TestMarketArgumentFillsInTheCharactersMarket(t *testing.T) {
 		t.Fatal("a character's own market is still its faction's")
 	}
 }
+
+func TestRememberSummarisesTheDayBefore(t *testing.T) {
+	dir := t.TempDir()
+	folder := filepath.Join(dir, "history", "eu-114")
+	os.MkdirAll(folder, 0o700)
+	writeRows(t, filepath.Join(folder, "2026-11-19.jsonl"), auctionRow{T: 1, Items: map[int][2]int64{2589: {24, 125}}})
+	w := testWatcher(dir, time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC))
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	if err := w.remember(&auctionBook{Market: m, Fetched: 2, Items: map[int]*auctionItem{2589: {Unit: 25, Listed: 90}}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(folder, "2026-11-19.sum.json"))
+	if err != nil || string(data) != `{"date":"2026-11-19","snapshots":1,"items":{"2589":[24,24,125,1]}}` {
+		t.Fatal("yesterday is summarised after it is compressed:", string(data), err)
+	}
+	if _, err := os.Stat(filepath.Join(folder, "2026-11-20.sum.json")); err == nil {
+		t.Fatal("today has no summary yet")
+	}
+}
+
+func TestAuctionToolsReadHistoryAndAnotherMarket(t *testing.T) {
+	requests := fakeBattleNet(t)
+	useBattleNetClient(t)
+	dir := filepath.Join(t.TempDir(), "snapshots")
+	ask := func(tool, args string) (mcpObject, error) {
+		t.Helper()
+		id, err := saveGameSnapshot(dir, parseGameSnapshot("Game: WoW Forever 1.60.1.70938 · EU · PvE\nCharacter: level 15 Orc Warrior, Horde · 1g 0s 0c", 1770000000))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return queryGameSnapshot(dir, tool, json.RawMessage(`{"snapshot_id":"`+id+`",`+args+`}`))
+	}
+
+	// The character's own market is never downloaded by a tool: the tray keeps it.
+	if _, err := ask("get_auction_prices", `"items":[{"id":2589}]`); err == nil || len(*requests) != 0 {
+		t.Fatal("the own market waits for the tray:", err, *requests)
+	}
+
+	// Another market is downloaded on the spot, once, and not added to the tray's markets.
+	out, err := ask("get_auction_prices", `"items":[{"id":2589}],"market":{"faction":"Neutral"}`)
+	if err != nil || out["market"] != "EU Normal Neutral (house 117)" || out["items"].([]mcpObject)[0]["unit"] != int64(24) {
+		t.Fatal(out, err)
+	}
+	if len(*requests) != 2 || !strings.HasPrefix((*requests)[0], "/data/wow/ruleset/2/auctions/117 ") {
+		t.Fatal("both parts of house 117:", *requests)
+	}
+	if markets := recentMarkets(auctionDir(dir), time.Now()); len(markets) != 0 {
+		t.Fatal("a one-off look is not kept fresh:", markets)
+	}
+	*requests = nil
+	if _, err := ask("get_auction_prices", `"items":[{"id":2589}],"market":{"faction":"Neutral"}`); err != nil || len(*requests) != 0 {
+		t.Fatal("a book just downloaded is read as it is:", err, *requests)
+	}
+	if _, err := ask("get_auction_prices", `"items":[{"id":2589}],"market":{"ruleset":"RP"}`); err == nil || !strings.Contains(err.Error(), "not known yet") {
+		t.Fatal("a Roleplay house is not guessed:", err)
+	}
+
+	// Three finished days of history give the usual price.
+	folder := filepath.Join(auctionDir(dir), "history", "eu-117")
+	for i, unit := range []int64{30, 32, 34} {
+		date := time.Now().UTC().AddDate(0, 0, -3+i).Format(time.DateOnly)
+		data, _ := json.Marshal(auctionDay{Date: date, Snapshots: 20, Items: map[int][4]int64{2589: {unit, unit - 2, 100, 20}}})
+		os.WriteFile(filepath.Join(folder, date+".sum.json"), data, 0o600)
+	}
+	out, err = ask("get_auction_prices", `"items":[{"id":2589},{"id":4306}],"market":{"faction":"Neutral"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := out["items"].([]mcpObject)
+	h, _ := items[0]["history"].(mcpObject)
+	if h == nil || h["usual_unit"] != int64(32) || h["vs_usual_percent"] != -25 || h["days"] != 3 {
+		t.Fatalf("history of linen: %+v", items[0])
+	}
+	if items[1]["history"] != nil {
+		t.Fatal("no history without days:", items[1])
+	}
+}

@@ -89,8 +89,8 @@ func readAuctionRows(path string) ([]auctionRow, error) {
 	return rows, scan.Err()
 }
 
-// summarizeAuctionHistory writes <day>.sum.json for every finished day in the folder that has rows and no summary yet,
-// from cutoff (the oldest day kept) up to the day before today.
+// summarizeAuctionHistory writes <day>.sum.json for every finished day in the folder that has readable rows and no
+// summary yet, from cutoff (the oldest day kept) up to the day before today.
 func summarizeAuctionHistory(folder, today, cutoff string) error {
 	entries, err := os.ReadDir(folder)
 	if err != nil {
@@ -113,8 +113,8 @@ func summarizeAuctionHistory(folder, today, cutoff string) error {
 			continue
 		}
 		list, err := readAuctionRows(path)
-		if err != nil {
-			return err
+		if err != nil || len(list) == 0 {
+			continue // a damaged or empty day stays without a summary; the others are still made
 		}
 		data, err := json.Marshal(summarizeAuctionDay(day, list))
 		if err != nil {
