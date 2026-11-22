@@ -126,8 +126,8 @@ The adviser's standing instructions are in [helper/game-adviser.md](helper/game-
   the snapshots unchanged to signed-in players. The mirror runs on Cloudflare, which sees your IP address and the
   auction house you ask for. The mirror's own code stores nothing about requests. With your own Battle.net API client the companion asks
   Blizzard directly instead, and `"auctionMirror": "off"` in `settings.json` stops the mirror altogether. Either way
-  the companion asks for nothing but your market's snapshot (region, ruleset and faction pick it); no character
-  data is sent. Prices and their history stay on your disk.
+  the companion asks for nothing but your market's snapshot, or from the mirror its summary and price history
+  (region, ruleset and faction pick the market); no character data is sent. Prices and their history stay on your disk.
 - Once a day the companion downloads the files of the world dataset that changed from the same server. Cloudflare
   sees your IP address, the server sees the sign-in key, and nothing else is sent. The dataset stays on your disk.
 - Every hour it downloads `world/changes.json` from the same server: the data changes of the last 30 days and when
@@ -199,7 +199,9 @@ Blizzard serves WoW: Forever's auction houses through its Game Data API, about o
 an API client, so the project runs a mirror on Cloudflare at `api.lfguidance.com` with a client of its own: every few
 minutes it asks Blizzard about every Forever auction house and keeps the newest snapshot of each, unchanged. Without
 a client of yours the companion reads from the mirror once you have chosen *Sign in with Battle.net…* in its menu
-(see [Cost and privacy](#cost-and-privacy)).
+(see [Cost and privacy](#cost-and-privacy)). The mirror also keeps each house's summary, made by the same rules as the
+companion's own, and its daily price history for 30 days: the companion downloads the summary, about a sixth of the
+snapshot, and the history of the days it was not running.
 
 To ask Blizzard yourself instead, use your own free API client; the companion then never contacts the mirror.
 Setting it up is the same on macOS and Windows (where, like the rest of the Windows build, it has not been tried
@@ -228,9 +230,9 @@ every 20 minutes once it is half an hour late. It keeps a summary in the `auctio
 on Windows) and a price history for 30 days, the longest Blizzard's API terms allow (about 1 MB a day per market,
 compressed, plus a summary of each finished day of about 180 KB). It offers the adviser two tools:
 
-- `get_auction_prices` for the price of named items. Once the companion has seen a market on three days, it also gives
-  each item's usual lowest price on those days, the lowest it went, the last seven days and how far today's price is
-  from the usual one.
+- `get_auction_prices` for the price of named items. Once there are three finished days of a market (from the mirror,
+  or seen by the companion itself with your own client), it also gives each item's usual lowest price on those days,
+  the lowest it went, the last seven days and how far today's price is from the usual one.
 - `find_auction_upgrades`, which picks the auctions for one equipment slot within a budget and lets the running game
   drop what the character cannot wear and read each candidate's exact stats. For that search it takes each item's
   class and equipment slot from the world dataset.

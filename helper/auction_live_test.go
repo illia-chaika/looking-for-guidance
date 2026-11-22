@@ -10,7 +10,9 @@ import (
 	"time"
 )
 
-// TestLiveAuction downloads one real house with the Battle.net client in the keychain:
+// TestLiveAuction downloads one real house with the Battle.net client in the keychain, or with
+// FOREVER_AUCTION_MIRROR=1 from the project's mirror with the sign-in key in the keychain (the server's price book and
+// the days of history it keeps):
 //
 //	FOREVER_AUCTION="EU PvE Horde" go test -run TestLiveAuction -v ./helper
 func TestLiveAuction(t *testing.T) {
@@ -23,8 +25,12 @@ func TestLiveAuction(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := newAuctionWatcher(t.TempDir())
+	var src auctionSource = w.bn
+	if os.Getenv("FOREVER_AUCTION_MIRROR") != "" {
+		src = &auctionMirror{base: defaultAuctionMirror, http: w.bn.http, token: backendToken()}
+	}
 	start := time.Now()
-	if changed, err := w.update(context.Background(), w.bn, m); err != nil || !changed {
+	if changed, err := w.update(context.Background(), src, m); err != nil || !changed {
 		t.Fatal(changed, err)
 	}
 	path := filepath.Join(w.dir, m.key()+".json")
@@ -42,7 +48,9 @@ func TestLiveAuction(t *testing.T) {
 	if len(book.Items) < 500 || time.Since(book.modifiedAt()) > 3*time.Hour {
 		t.Fatal("expected a busy and fresh house")
 	}
-	if changed, err := w.update(context.Background(), w.bn, m); err != nil || changed {
+	days, _ := filepath.Glob(filepath.Join(w.dir, "history", m.key(), "*.sum.json"))
+	t.Logf("days of price history from the server: %d", len(days))
+	if changed, err := w.update(context.Background(), src, m); err != nil || changed {
 		t.Fatal("the same snapshot is not downloaded twice:", changed, err)
 	}
 	world := &worldWatcher{dir: worldDir(w.dir), http: http.DefaultClient, base: func() string { return defaultWorldMirror }, now: time.Now}

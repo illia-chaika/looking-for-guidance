@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -557,8 +558,9 @@ func TestAuctionMirrorStandsInForAMissingClient(t *testing.T) {
 	now = now.Add(auctionEvery)
 	w.now = func() time.Time { return now }
 	w.refresh(ctx)
-	if len(*requests) != 2 || (*requests)[0] != "/v1/auctions/eu/114 Fri, 20 Nov 2026 17:23:20 GMT" {
-		t.Fatal("an unchanged house is only asked about:", *requests)
+	if len(*requests) != 3 || (*requests)[0] != "/v1/auctions/eu/114/book Fri, 20 Nov 2026 17:23:20 GMT" ||
+		(*requests)[1] != "/v1/auctions/eu/114 Fri, 20 Nov 2026 17:23:20 GMT" {
+		t.Fatal("without a price book on the server, an unchanged house is only asked about:", *requests)
 	}
 	if status := loadAuctionStatus(dir); len(status.Failing) != 0 || status.Refused != "" {
 		t.Fatalf("nothing failed: %+v", status)
@@ -567,6 +569,87 @@ func TestAuctionMirrorStandsInForAMissingClient(t *testing.T) {
 	// A path the mirror does not serve is refused before any request.
 	if _, err := (&auctionMirror{base: "https://x", http: http.DefaultClient}).get(ctx, "eu", "/data/wow/token/index", ""); err == nil {
 		t.Fatal("only auction house paths go to the mirror")
+	}
+}
+
+// From a mirror with price books, the companion takes a house's book instead of its two snapshot parts, and the
+// closed days of price history it has no summary of.
+func TestAuctionMirrorGivesTheServersBookAndTheDaysMissed(t *testing.T) {
+	useBackendToken(t)
+	modified := "Sat, 21 Nov 2026 09:23:20 GMT"
+	day := func(date string, unit int) string {
+		return fmt.Sprintf(`{"date":%q,"snapshots":24,"items":{"2589":[%d,%d,100,24]}}`, date, unit, unit-2)
+	}
+	files := map[string]string{
+		"/v1/auctions/eu/114/book": `{"region":"eu","house":114,"modified":{"auctions":"` + modified + `","commodities":"` +
+			modified + `"},"days":["2026-10-01","../x","2026-11-18","2026-11-19","2026-11-20","2026-11-21"],` +
+			`"items":{"2589":{"unit":30,"listed":125,"listings":3,"variants":[{"unit":30,"listed":125,"listings":3,"tiers":[[30,5]]}]}}}`,
+		"/v1/auctions/eu/114/days/2026-11-18": day("2026-11-18", 20),
+		"/v1/auctions/eu/114/days/2026-11-19": day("2026-11-19", 24),
+	}
+	var requests []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path+" "+r.Header.Get("If-Modified-Since"))
+		body, ok := files[r.URL.Path]
+		book := strings.HasSuffix(r.URL.Path, "/book")
+		switch {
+		case r.Header.Get("Authorization") != "Bearer "+testBackendToken:
+			w.WriteHeader(http.StatusUnauthorized)
+		case !ok:
+			http.NotFound(w, r)
+		case book && r.Header.Get("If-Modified-Since") == modified:
+			w.WriteHeader(http.StatusNotModified)
+		default:
+			if book {
+				w.Header().Set("Last-Modified", modified)
+			}
+			w.Header().Set("Content-Encoding", "gzip")
+			z := gzip.NewWriter(w)
+			z.Write([]byte(body))
+			z.Close()
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	now := time.Date(2026, 11, 21, 10, 0, 0, 0, time.UTC)
+	w := testWatcher(dir, now)
+	m, _ := marketFacts{Region: "EU", Ruleset: "PvE", Faction: "Horde"}.market()
+	folder := filepath.Join(dir, "history", m.key())
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// The companion saw the 20th itself.
+	if err := os.WriteFile(filepath.Join(folder, "2026-11-20.sum.json"), []byte(day("2026-11-20", 28)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mirror := &auctionMirror{base: srv.URL, http: srv.Client(), token: testBackendToken}
+
+	if changed, err := w.update(context.Background(), mirror, m); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	want := []string{"/v1/auctions/eu/114/book ", "/v1/auctions/eu/114/days/2026-11-18 ", "/v1/auctions/eu/114/days/2026-11-19 "}
+	if !slices.Equal(requests, want) {
+		t.Fatal("the book and the two days missed, nothing else:", requests)
+	}
+	book, err := loadAuctionBook(filepath.Join(dir, "eu-114.json"))
+	if err != nil || book.Items[2589].Unit != 30 || book.Items[2589].Variants[0].Tiers[0] != [2]int64{30, 5} ||
+		book.Modified["auctions"] != modified || book.Fetched != now.UnixMilli() {
+		t.Fatalf("the server's book is the house's book: %+v %v", book, err)
+	}
+	if h := auctionHistory(folder, []int{2589}, map[int]int64{2589: 30}, now)[2589]; h["days"] != 3 || h["usual_unit"] != int64(24) {
+		t.Fatalf("the days from the server count toward the usual price: %v", h)
+	}
+	if _, err := os.Stat(filepath.Join(folder, "2026-11-21.jsonl")); err != nil {
+		t.Fatal("the book is a row of today's history too:", err)
+	}
+
+	requests = nil
+	if changed, err := w.update(context.Background(), mirror, m); err != nil || changed {
+		t.Fatal(changed, err)
+	}
+	if !slices.Equal(requests, []string{"/v1/auctions/eu/114/book " + modified}) {
+		t.Fatal("an unchanged book is only asked about:", requests)
 	}
 }
 

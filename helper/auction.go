@@ -359,11 +359,21 @@ type auctionSource interface {
 }
 
 // auctionMirror is the project's mirror of every Forever auction house: the same JSON and Last-Modified as Blizzard,
-// for the token the server gave at the Battle.net sign-in.
+// for the token the server gave at the Battle.net sign-in. It also serves each house's price book, which the server
+// builds from those snapshots with bookBuilder's rules, and the closed days of its price history.
 type auctionMirror struct {
 	base  string
 	http  *http.Client
 	token string
+}
+
+var errNotOnMirror = errors.New("the auction mirror answered 404 Not Found")
+
+// serverBook is the server's price book of a house and the dates of the closed days of price history it keeps.
+type serverBook struct {
+	Modified map[string]string    `json:"modified"`
+	Items    map[int]*auctionItem `json:"items"`
+	Days     []string             `json:"days"`
 }
 
 func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*http.Response, error) {
@@ -371,7 +381,49 @@ func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*h
 	if part == nil {
 		return nil, fmt.Errorf("the auction mirror has no %s", path)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.base+"/v1/auctions/"+region+"/"+part[1]+part[2], nil)
+	return m.fetch(ctx, "/v1/auctions/"+region+"/"+part[1]+part[2], since)
+}
+
+// book gives the server's price book of a house, or nil when it has not changed since the given time.
+func (m *auctionMirror) book(ctx context.Context, market auctionMarket, since string) (*serverBook, error) {
+	resp, err := m.fetch(ctx, fmt.Sprintf("/v1/auctions/%s/%d/book", market.Region, market.House), since)
+	if err != nil || resp == nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var b serverBook
+	if err := json.NewDecoder(io.LimitReader(resp.Body, auctionMaxBody)).Decode(&b); err != nil {
+		return nil, fmt.Errorf("the server's price book of %s: %w", market.label(), err)
+	}
+	if len(b.Modified) == 0 {
+		return nil, fmt.Errorf("the server's price book of %s has no snapshot time", market.label())
+	}
+	if b.Items == nil {
+		b.Items = map[int]*auctionItem{}
+	}
+	return &b, nil
+}
+
+// day gives one closed day of the server's price history of a house.
+func (m *auctionMirror) day(ctx context.Context, market auctionMarket, date string) (*auctionDay, error) {
+	resp, err := m.fetch(ctx, fmt.Sprintf("/v1/auctions/%s/%d/days/%s", market.Region, market.House, date), "")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var d auctionDay
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&d); err != nil {
+		return nil, err
+	}
+	if d.Date != date || d.Items == nil {
+		return nil, fmt.Errorf("the server sent %q for %s", d.Date, date)
+	}
+	return &d, nil
+}
+
+// fetch asks the mirror for one path; with since set, an unchanged answer comes back as nil.
+func (m *auctionMirror) fetch(ctx context.Context, path, since string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.base+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -393,9 +445,12 @@ func (m *auctionMirror) get(ctx context.Context, region, path, since string) (*h
 	case resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotModified:
 		resp.Body.Close()
 		return nil, nil
+	case resp.StatusCode == http.StatusNotFound:
+		resp.Body.Close()
+		return nil, fmt.Errorf("%w for %s", errNotOnMirror, path)
 	}
 	resp.Body.Close()
-	return nil, fmt.Errorf("the auction mirror answered %s for %s", resp.Status, req.URL.Path)
+	return nil, fmt.Errorf("the auction mirror answered %s for %s", resp.Status, path)
 }
 
 type auctionWatcher struct {
@@ -414,10 +469,29 @@ func newAuctionWatcher(dir string) *auctionWatcher {
 		bn: &battleNet{client: battleNetClient, http: &http.Client{Timeout: 3 * time.Minute}, now: time.Now}}
 }
 
-// update downloads one house when the source has a newer snapshot of it, and reports whether it did.
+// update downloads one house when the source has a newer snapshot of it, and reports whether it did. From the
+// mirror it takes the server's price book of the house, about a sixth of the snapshot's download; a house the server has
+// no book of yet is built from its snapshot.
 func (w *auctionWatcher) update(ctx context.Context, src auctionSource, m auctionMarket) (bool, error) {
 	path := filepath.Join(w.dir, m.key()+".json")
 	old, _ := loadAuctionBook(path)
+	if mirror, ok := src.(*auctionMirror); ok {
+		since := ""
+		if old != nil && !old.modifiedAt().IsZero() {
+			since = old.modifiedAt().UTC().Format(http.TimeFormat)
+		}
+		sb, err := mirror.book(ctx, m, since)
+		switch {
+		case errors.Is(err, errNotOnMirror):
+		case err != nil:
+			return false, err
+		case sb == nil:
+			return false, w.current(path, old, m)
+		default:
+			w.fillDays(ctx, mirror, m, sb.Days)
+			return true, w.store(path, &auctionBook{Market: m, Modified: sb.Modified, Items: sb.Items})
+		}
+	}
 	base := fmt.Sprintf("/data/wow/ruleset/%d/auctions/%d", rulesetIDs[m.Ruleset], m.House)
 	parts := [][2]string{{"auctions", base}, {"commodities", base + "/commodities"}}
 	build := newBookBuilder()
@@ -445,11 +519,7 @@ func (w *auctionWatcher) update(ctx context.Context, src auctionSource, m auctio
 			got[part[0]] = fresh
 		}
 		if !got["auctions"] && !got["commodities"] {
-			if w.modified != nil {
-				w.modified[m.key()] = old.modifiedAt() // the stored book may be newer than this watcher knew
-			}
-			now := w.now()
-			return false, os.Chtimes(path, now, now) // confirmed current
+			return false, w.current(path, old, m)
 		}
 	}
 	// A summary covers both parts, so the one that did not change is read again in full.
@@ -460,21 +530,69 @@ func (w *auctionWatcher) update(ctx context.Context, src auctionSource, m auctio
 			}
 		}
 	}
-	book.Items, book.Fetched = build.items(), w.now().UnixMilli()
+	book.Items = build.items()
+	return true, w.store(path, book)
+}
+
+// current notes that the stored book of a house is still the newest.
+func (w *auctionWatcher) current(path string, old *auctionBook, m auctionMarket) error {
+	if w.modified != nil {
+		w.modified[m.key()] = old.modifiedAt() // the stored book may be newer than this watcher knew
+	}
+	now := w.now()
+	return os.Chtimes(path, now, now) // confirmed current
+}
+
+// store writes a new book of a house and adds it to the price history.
+func (w *auctionWatcher) store(path string, book *auctionBook) error {
+	book.Fetched = w.now().UnixMilli()
 	data, err := json.Marshal(book)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if err := os.MkdirAll(w.dir, 0o700); err != nil {
-		return false, err
+		return err
 	}
 	if err := writeFileAtomic(path, data); err != nil {
-		return false, err
+		return err
 	}
 	if w.modified != nil {
-		w.modified[m.key()] = book.modifiedAt()
+		w.modified[book.Market.key()] = book.modifiedAt()
 	}
-	return true, w.remember(book)
+	return w.remember(book)
+}
+
+// fillDays saves the server's closed days of price history that the house's folder has no summary of, so that the
+// usual price also covers the days the companion was off. They come before remember summarises the companion's own
+// rows, so a day the server saw whole wins over one the companion saw in part. A failure stops it until the next book.
+func (w *auctionWatcher) fillDays(ctx context.Context, mirror *auctionMirror, m auctionMarket, days []string) {
+	folder := filepath.Join(w.dir, "history", m.key())
+	now := w.now().UTC()
+	today, cutoff := now.Format(time.DateOnly), now.AddDate(0, 0, -auctionHistoryDays).Format(time.DateOnly)
+	for _, date := range days {
+		sum := filepath.Join(folder, date+".sum.json")
+		if _, err := time.Parse(time.DateOnly, date); err != nil || date < cutoff || date >= today {
+			continue
+		}
+		if _, err := os.Stat(sum); err == nil {
+			continue
+		}
+		d, err := mirror.day(ctx, m, date)
+		var data []byte
+		if err == nil {
+			data, err = json.Marshal(d)
+		}
+		if err == nil {
+			err = os.MkdirAll(folder, 0o700)
+		}
+		if err == nil {
+			err = writeFileAtomic(sum, data)
+		}
+		if err != nil {
+			logf("Price history of %s on %s from the server: %v", m.label(), date, err)
+			return
+		}
+	}
 }
 
 // remember appends the lowest price and quantity of every item to the house's history, one line per snapshot and
