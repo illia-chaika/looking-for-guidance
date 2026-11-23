@@ -1,10 +1,13 @@
 # Looking for Guidance
 
 An in-game adviser for World of Warcraft: Forever. It adds a chat window and a field journal that know your
-character — level, talents, quest log, bags, professions — and answer with sources checked against the current game,
+character (level, talents, quest log, bags, professions) and answer with sources checked against the current game,
 not against fifteen-year-old guides.
 
 Every player has typed LFG. This is the other kind: looking for guidance.
+
+[Website](https://lfguidance.com) · [Download](#setup) · [Privacy policy](https://lfguidance.com/privacy) ·
+[Support the project](#support-the-project)
 
 Ask it things like *"Where do I hand this quest in?"*, *"Is this staff better than mine?"*, *"What should I sell
 before I head to town?"* or *"What can I buy for my chest under 2 gold?"*
@@ -34,7 +37,7 @@ one-time *Sign in with Battle.net* in the companion's menu it reads Blizzard's h
 mirror, or it asks Blizzard through your own Battle.net API client if you prefer (see [Auction prices](#auction-prices)).
 
 **Journal.** Eight sections of advice for your character. What the game itself knows is shown at once; what needs
-research is prepared when you press the section's button — or by itself, if you switch research to automatic:
+research is prepared when you press the section's button, or by itself if you switch research to automatic:
 
 | Section | What you get |
 | --- | --- |
@@ -81,12 +84,12 @@ flowchart LR
   frame lives on disk for 40 ms and the companion reads it from outside, so every 48 data frames are followed by six
   check frames: any six frames missed in a row are rebuilt, and a packet that still does not arrive is sent again.
 - **Computer → game.** The companion writes one Lua file. The add-on reads it by loading a fresh load-on-demand
-  add-on each time — 512 of them per interface session.
+  add-on each time, 512 of them per interface session.
 - **Advice.** The companion runs an agent you already have: the [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
   or [Claude Code](https://code.claude.com/docs/en/setup). You choose one in the companion's menu and everything
-  goes to it — chats and journal research alike. Either way the agent is confined to the adviser's role: it reads
+  goes to it, chats and journal research alike. Either way the agent is confined to the adviser's role: it reads
   character data through a local MCP server, searches the web and reads pages, and can do nothing else. Nothing but
-  the question and the tool results it asks for leaves the computer — apart from the downloads below.
+  the question and the tool results it asks for leaves the computer, apart from the downloads below.
 - **World data.** The adviser looks up quests, NPCs, items, spells and places in a dataset on your disk before it
   searches the web: who gives and takes a quest, where an NPC stands and what it sells, where an item drops and how
   often, a spell's coefficients. The project builds the dataset once for everybody and the companion downloads it
@@ -98,12 +101,14 @@ flowchart LR
   professions. Notes about another class, another race or content far above your level are left out. The adviser
   only writes the short explanation you ask for, from that shortlist.
 - **Journal research** runs as hidden one-shot jobs with a fixed output schema. The companion validates every answer
-  in Go — quotes must appear in the fetched text, IDs must be ones the game sent, links must be `https` — and caches
+  in Go (quotes must appear in the fetched text, IDs must be ones the game sent, links must be `https`) and caches
   it on disk.
 
 The adviser's standing instructions are in [helper/game-adviser.md](helper/game-adviser.md).
 
 ## Cost and privacy
+
+The project's [privacy policy](https://lfguidance.com/privacy) is on the website.
 
 - Advice uses **your own** subscription: a Claude plan through Claude Code, or a ChatGPT plan through the Codex CLI.
   One of them is enough. There is no account to create. The project's only server holds the auction mirror and the
@@ -285,8 +290,8 @@ the items, NPCs, spells and quests it refers to:
   quest titles in every language, descriptions and rewards.
 - **The game client's tables**, numbers only, as [wago.tools](https://wago.tools) publishes them: item levels,
   prices and slots, spell effects with their coefficients, cast times, ranges, cooldowns, costs and reagents.
-- **[ForeverDB.net](https://foreverdb.net)**: what its players' add-on recorded in WoW Forever — where NPCs stand,
-  what vendors sell and for how much, drop chances, who gives and takes quests, new Forever quests, flight times —
+- **[ForeverDB.net](https://foreverdb.net)**: what its players' add-on recorded in WoW Forever: where NPCs stand,
+  what vendors sell and for how much, drop chances, who gives and takes quests, new Forever quests, flight times,
   together with Classic data from CMaNGOS where Forever's is missing, labelled as Classic.
 
 The project's backend fetches each source once for everybody, merges them by game ID, and serves the result to
@@ -386,7 +391,20 @@ referenced by path.
 
 ## Roadmap
 
-- Verify the full Windows experience in the game and add Windows code signing.
+- Verify the full Windows experience in the game and add Windows code signing (the current
+  [donation goal](https://ko-fi.com/illiachaika)).
+
+## Support the project
+
+Looking for Guidance is free, with every feature, and it will stay that way. Donations never unlock anything. They
+help pay for the AI subscriptions the project is built with, the Apple developer membership, a code-signing
+certificate for the Windows app and the domain.
+
+- [Ko-fi](https://ko-fi.com/illiachaika): card or PayPal, no account needed.
+- Bitcoin, Ethereum, Base, Arbitrum One, Solana and USDT on TRON: addresses and QR codes are on the
+  [website](https://lfguidance.com/#support).
+
+A star, a bug report or a word to your guild helps too.
 
 ## Licence and credits
 
